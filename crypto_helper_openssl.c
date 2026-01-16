@@ -1,4 +1,5 @@
-/* openssl based implementation of crypto functions
+/*
+ * openssl based implementation of crypto functions
  *
  * Contributors can provide alternate implementations in future and make
  * changes to the makefile to compile/link against these alternate crypto

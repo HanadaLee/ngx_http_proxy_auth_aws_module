@@ -1,4 +1,5 @@
-/* AWS V4 Signature implementation
+/* 
+ * AWS V4 Signature implementation
  *
  * This file contains the modularized source code for accepting a given HTTP
  * request as ngx_http_request_t and modifiying it to introduce the
@@ -20,8 +21,8 @@
  * (4) All heap allocation must be done using ngx_pool_t instead of malloc
  */
 
-#ifndef __NGX_HTTP_AWS_FUNCTIONS_INTERNAL__H__
-#define __NGX_HTTP_AWS_FUNCTIONS_INTERNAL__H__
+#ifndef __NGX_HTTP_PROXY_AUTH_AWS_FUNCTIONS_INTERNAL__H__
+#define __NGX_HTTP_PROXY_AUTH_AWS_FUNCTIONS_INTERNAL__H__
 
 
 #include <time.h>
@@ -83,19 +84,21 @@ static const ngx_str_t HOST_HEADER = ngx_string("host");
 static const ngx_str_t AUTHZ_HEADER = ngx_string("authorization");
 
 
-static inline char* __CHAR_PTR_U(u_char* ptr)
+static inline char *
+__CHAR_PTR_U(u_char *ptr)
 {
-    return (char*)ptr;
+    return (char *) ptr;
 }
 
 
-static inline const char* __CONST_CHAR_PTR_U(const u_char* ptr)
+static inline const char *
+__CONST_CHAR_PTR_U(const u_char *ptr)
 {
-    return (const char*)ptr;
+    return (const char *) ptr;
 }
 
 
-static inline const ngx_str_t*
+static inline const ngx_str_t *
 ngx_http_proxy_auth_aws__compute_request_time(ngx_http_request_t *r,
     const time_t *timep)
 {
@@ -151,7 +154,7 @@ ngx_http_proxy_auth_aws__is_already_encoded(u_char *data, size_t len)
 }
 
 
-static inline const ngx_str_t*
+static inline const ngx_str_t *
 ngx_http_proxy_auth_aws__canonize_query_string(ngx_http_request_t *r,
     const ngx_str_t *args)
 {
@@ -310,7 +313,7 @@ ngx_http_proxy_auth_aws__canonize_query_string(ngx_http_request_t *r,
 }
 
 
-static inline const ngx_str_t*
+static inline const ngx_str_t *
 ngx_http_proxy_auth_aws__host_from_bucket(ngx_http_request_t *r,
     const ngx_str_t *bucket)
 {
@@ -400,7 +403,7 @@ ngx_http_proxy_auth_aws__canonize_headers(ngx_http_request_t *r,
 }
 
 
-static inline const ngx_str_t*
+static inline const ngx_str_t *
 ngx_http_proxy_auth_aws__request_body_hash(ngx_http_request_t *r)
 {
     /* TODO: support cases involving non-empty body */
@@ -473,7 +476,7 @@ ngx_http_proxy_auth_aws__escape_uri(ngx_http_request_t *r, ngx_str_t* src)
 }
 
 
-static inline const ngx_str_t*
+static inline const ngx_str_t *
 ngx_http_proxy_auth_aws__canon_uri(ngx_http_request_t *r, const ngx_str_t *path)
 {
     ngx_str_t      *retval;
@@ -638,7 +641,7 @@ ngx_http_proxy_auth_aws__string_to_sign(ngx_http_request_t *r,
 }
 
 
-static inline const ngx_str_t*
+static inline const ngx_str_t *
 ngx_http_proxy_auth_aws__make_auth_token(ngx_http_request_t *r,
     const ngx_str_t *signature, const ngx_str_t *signed_header_names,
     const ngx_str_t *access_key, const ngx_str_t *key_scope)
@@ -830,7 +833,7 @@ ngx_http_proxy_auth_aws__generate_signing_key(ngx_http_request_t *r,
 
 
 /* list of header_pair_t */
-static inline const ngx_array_t*
+static inline const ngx_array_t *
 ngx_http_proxy_auth_aws__sign(ngx_http_request_t *r,
     const ngx_str_t *access_key, const ngx_str_t *signing_key,
     const ngx_str_t *key_scope, const ngx_str_t *secret_key,
