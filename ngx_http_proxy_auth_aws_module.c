@@ -178,22 +178,22 @@ static ngx_http_variable_t  ngx_http_proxy_auth_aws_vars[] = {
 
     { ngx_string("proxy_auth_aws_authorization"), NULL,
       ngx_http_proxy_auth_aws_variables,
-      NGX_HTTP_PROXY_AUTH_VAR_AUTHORIZATION,
+      NGX_HTTP_PROXY_AUTH_AWS_VAR_AUTHORIZATION,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
     { ngx_string("proxy_auth_aws_date"), NULL,
       ngx_http_proxy_auth_aws_variables,
-      NGX_HTTP_PROXY_AUTH_VAR_DATE,
+      NGX_HTTP_PROXY_AUTH_AWS_VAR_DATE,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
     { ngx_string("proxy_auth_aws_content_sha256"), NULL,
       ngx_http_proxy_auth_aws_variables,
-      NGX_HTTP_PROXY_AUTH_VAR_CONTENT_SHA256,
+      NGX_HTTP_PROXY_AUTH_AWS_VAR_CONTENT_SHA256,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
     { ngx_string("proxy_auth_aws_host"), NULL,
       ngx_http_proxy_auth_aws_variables,
-      NGX_HTTP_PROXY_AUTH_VAR_HOST,
+      NGX_HTTP_PROXY_AUTH_AWS_VAR_HOST,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
       ngx_http_null_variable
