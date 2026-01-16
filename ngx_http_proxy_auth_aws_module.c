@@ -227,7 +227,7 @@ ngx_http_proxy_auth_aws_variables(ngx_http_request_t *r,
     ngx_list_part_t                *part;
     ngx_table_elt_t                *header;
     ngx_uint_t                      i;
-    ngx_str_t                      *name;
+    const ngx_str_t                *name;
     ngx_uint_t                      hash;
 
     ctx = ngx_http_get_module_ctx(r,
@@ -405,6 +405,7 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
     ngx_table_elt_t          *h;
     header_pair_t            *hv;
     ngx_uint_t                i, j;
+    const ngx_array_t        *signed_headers
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_proxy_auth_aws_module);
 
@@ -431,7 +432,7 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
         return NGX_DECLINED;
     }
 
-    const ngx_array_t *signed_headers =
+    signed_headers =
         ngx_http_proxy_auth_aws__sign(r, &conf->access_key,
             &conf->signing_key_decoded, &conf->key_scope, &conf->secret_key,
             &conf->region, &conf->bucket, &conf->endpoint, conf->host,
