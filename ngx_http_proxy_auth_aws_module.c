@@ -405,7 +405,7 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
     ngx_table_elt_t          *h;
     header_pair_t            *hv;
     ngx_uint_t                i, j;
-    ngx_array_t              *signed_headers;
+    const ngx_array_t        *signed_headers;
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_proxy_auth_aws_module);
 
