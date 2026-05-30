@@ -21,25 +21,6 @@ static void null_test_success(void **state)
     (void) state; /* unused */
 }
 
-static void host_header_ctor(void **state)
-{
-    ngx_str_t bucket;
-    const ngx_str_t* host;
-
-    (void) state; /* unused */
-
-    bucket.data = "test-es-three";
-    bucket.len = strlen(bucket.data);
-    host = ngx_http_proxy_auth_aws__host_from_bucket(r->pool, &bucket);
-    assert_string_equal("test-es-three.s3.amazonaws.com", host->data);
-
-    bucket.data = "complex.sub.domain.test";
-    bucket.len = strlen(bucket.data);
-    host = ngx_http_proxy_auth_aws__host_from_bucket(r->pool, &bucket);
-    assert_string_equal("complex.sub.domain.test.s3.amazonaws.com",
-        host->data);
-}
-
 static void x_amz_date(void **state)
 {
     time_t t;
@@ -105,17 +86,16 @@ static void canon_header_string(void **state)
 {
     (void) state; /* unused */
 
-    ngx_str_t bucket, date, hash, endpoint;
+    ngx_str_t host, date, hash;
     struct AwsCanonicalHeaderDetails retval;
 
-    bucket.data = "bugait"; bucket.len = 6;
+    host.data = "bugait.s3.amazonaws.com"; host.len = 23;
     date.data = "20160221T063112Z"; date.len = 16;
     hash.data = "f0e4c2f76c58916ec258f246851bea091d14d4247"
         "a2fc3e18694461b1816e13b"; hash.len = 64;
-    endpoint.data = "s3.amazonaws.com"; endpoint.len = 16;
 
-    retval = ngx_http_proxy_auth_aws__canonize_headers(r->pool, NULL,
-        &bucket, &date, &hash, &endpoint);
+    retval = ngx_http_proxy_auth_aws__canonize_headers(r, &host, &date,
+        &hash);
     assert_string_equal(retval.canon_header_str->data,
         "host:bugait.s3.amazonaws.com\n"
         "x-amz-content-sha256:f0e4c2f76c58916ec258f246851bea091d14d4247a2fc3e18694461b1816e13b\n"
@@ -126,15 +106,14 @@ static void signed_headers(void **state)
 {
     (void) state; /* unused */
 
-    ngx_str_t bucket, date, hash, endpoint;
+    ngx_str_t host, date, hash;
     struct AwsCanonicalHeaderDetails retval;
 
-    bucket.data = "bugait"; bucket.len = 6;
+    host.data = "bugait.s3.amazonaws.com"; host.len = 23;
     date.data = "20160221T063112Z"; date.len = 16;
     hash.data = "f0e4c2f76c58916ec258f246851bea091d14d4247a2fc3e18694461b1816e13b"; hash.len = 64;
-    endpoint.data = "s3.amazonaws.com"; endpoint.len = 16;
 
-    retval = ngx_http_proxy_auth_aws__canonize_headers(r->pool, NULL, &bucket, &date, &hash, &endpoint);
+    retval = ngx_http_proxy_auth_aws__canonize_headers(r, &host, &date, &hash);
     assert_string_equal(retval.signed_header_names->data, "host;x-amz-content-sha256;x-amz-date");
 }
 
@@ -242,11 +221,11 @@ static void canonical_url_with_special_chars(void **state)
 static void canonical_request_sans_qs(void **state)
 {
     (void) state; /* unused */
-    const ngx_str_t bucket = ngx_string("example");
+    const ngx_str_t host = ngx_string("example.s3.amazonaws.com");
     const ngx_str_t aws_date = ngx_string("20160221T063112Z");
     const ngx_str_t url = ngx_string("/");
     const ngx_str_t method = ngx_string("GET");
-    const ngx_str_t endpoint = ngx_string("s3.amazonaws.com");
+    const ngx_flag_t convert_head = 0;
 
     struct AwsCanonicalRequestDetails result;
 
@@ -255,7 +234,8 @@ static void canonical_request_sans_qs(void **state)
     r.args = EMPTY_STRING;
     r.connection = NULL;
 
-    result = ngx_http_proxy_auth_aws__make_canonical_request(&r, &bucket, &aws_date, &endpoint);
+    result = ngx_http_proxy_auth_aws__make_canonical_request(&r, &host, NULL,
+        &aws_date, &convert_head);
     assert_string_equal(result.canon_request->data, "GET\n\
 /\n\
 \n\
@@ -274,8 +254,8 @@ static void basic_get_signature(void **state)
     const ngx_str_t url = ngx_string("/");
     const ngx_str_t method = ngx_string("GET");
     const ngx_str_t key_scope = ngx_string("20150830/us-east-1/service/aws4_request");
-    const ngx_str_t bucket = ngx_string("example");
-    const ngx_str_t endpoint = ngx_string("s3.amazonaws.com");
+    const ngx_str_t host = ngx_string("example.s3.amazonaws.com");
+    const ngx_flag_t convert_head = 0;
 
     ngx_str_t signing_key, signing_key_b64e = ngx_string("k4EntTNoEN22pdavRF/KyeNx+e1BjtOGsCKu2CkBvnU=");
 
@@ -290,7 +270,8 @@ static void basic_get_signature(void **state)
     ngx_decode_base64(&signing_key, &signing_key_b64e);
 
     struct AwsSignedRequestDetails result = ngx_http_proxy_auth_aws__compute_signature(&r,
-                                &signing_key, &key_scope, &bucket, &endpoint);
+                                &signing_key, &key_scope, &host, NULL,
+                                &convert_head);
     assert_string_equal(result.signature->data, "4ed4ec875ff02e55c7903339f4f24f8780b986a9cc9eff03f324d31da6a57690");
 }
 
@@ -299,7 +280,6 @@ int main()
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(null_test_success),
         cmocka_unit_test(x_amz_date),
-        cmocka_unit_test(host_header_ctor),
         cmocka_unit_test(hmac_sha256),
         cmocka_unit_test(sha256),
         cmocka_unit_test(canon_header_string),

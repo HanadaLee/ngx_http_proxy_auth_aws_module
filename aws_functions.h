@@ -1,4 +1,4 @@
-/* 
+/*
  * AWS V4 Signature implementation
  *
  * This file contains the modularized source code for accepting a given HTTP
@@ -141,7 +141,7 @@ ngx_http_proxy_auth_aws__is_already_encoded(u_char *data, size_t len)
 
     for (i = 0; i < len - 2; i++) {
         if (data[i] == '%' &&
-            ((data[i + 1] >= '0' && data[i + 1] <= '9') 
+            ((data[i + 1] >= '0' && data[i + 1] <= '9')
              || (data[i + 1] >= 'A' && data[i + 1] <= 'F'))
             && ((data[i + 2] >= '0' && data[i +2 ] <= '9')
                 || (data[i + 2] >= 'A' && data[i + 2] <= 'F')))
@@ -218,7 +218,7 @@ ngx_http_proxy_auth_aws__canonize_query_string(ngx_http_request_t *r,
                         "qs_arg->key.data");
                     return &EMPTY_STRING;
                 }
-                qs_arg->key.len = (u_char *)ngx_escape_uri(qs_arg->key.data,
+                qs_arg->key.len = (u_char *) ngx_escape_uri(qs_arg->key.data,
                     p, len, NGX_ESCAPE_ARGS) - qs_arg->key.data;
             }
 
@@ -248,7 +248,7 @@ ngx_http_proxy_auth_aws__canonize_query_string(ngx_http_request_t *r,
                         "qs_arg->key.data");
                     return &EMPTY_STRING;
                 }
-                qs_arg->value.len = (u_char *)ngx_escape_uri(
+                qs_arg->value.len = (u_char *) ngx_escape_uri(
                     qs_arg->value.data, equal + 1, len - 1, NGX_ESCAPE_ARGS)
                     - qs_arg->value.data;
             }
@@ -310,23 +310,6 @@ ngx_http_proxy_auth_aws__canonize_query_string(ngx_http_request_t *r,
     safe_ngx_log_info(r, "canonical qs constructed is %V", retval);
 
     return retval;
-}
-
-
-static inline const ngx_str_t *
-ngx_http_proxy_auth_aws__host_from_bucket(ngx_http_request_t *r,
-    const ngx_str_t *bucket)
-{
-    static const char HOST_PATTERN[] = ".s3.amazonaws.com";
-    ngx_str_t *host;
-
-    host = ngx_palloc(r->pool, sizeof(ngx_str_t));
-    host->len = bucket->len + sizeof(HOST_PATTERN) + 1;
-    host->data = ngx_palloc(r->pool, host->len);
-    host->len = ngx_snprintf(host->data, host->len, "%V%s",
-        bucket, HOST_PATTERN) - host->data;
-
-    return host;
 }
 
 
@@ -414,7 +397,7 @@ ngx_http_proxy_auth_aws__request_body_hash(ngx_http_request_t *r)
 /* AWS wants a peculiar kind of URI-encoding: they want RFC 3986, except that
  * slashes shouldn't be encoded...
  * this function is a light wrapper around ngx_escape_uri that does exactly that
- * modifies the source in place if it needs to be escaped 
+ * modifies the source in place if it needs to be escaped
  * see http://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
  */
 static inline void
@@ -512,8 +495,8 @@ ngx_http_proxy_auth_aws__canon_uri(ngx_http_request_t *r, const ngx_str_t *path)
     }
 
     if (uri_len >= 3 && ngx_http_proxy_auth_aws__is_already_encoded(
-            (u_char *)uri_data, uri_len) == NGX_OK) {
-        src = (u_char *)uri_data;
+            (u_char *) uri_data, uri_len) == NGX_OK) {
+        src = (u_char *) uri_data;
         dst = retval->data;
         ngx_unescape_uri(&dst, &src, uri_len, 0);
         retval->len = dst - retval->data;
@@ -551,10 +534,10 @@ ngx_http_proxy_auth_aws__make_canonical_request(ngx_http_request_t *r,
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "making cononical request");
 
-    path.data = (u_char *)"";
+    path.data = (u_char *) "";
     path.len = 0;
 
-    args.data = (u_char *)"";
+    args.data = (u_char *) "";
     args.len = 0;
 
     if (uri != NULL && uri->data != NULL && uri->len > 0) {
@@ -837,8 +820,7 @@ static inline const ngx_array_t *
 ngx_http_proxy_auth_aws__sign(ngx_http_request_t *r,
     const ngx_str_t *access_key, const ngx_str_t *signing_key,
     const ngx_str_t *key_scope, const ngx_str_t *secret_key,
-    const ngx_str_t *region, const ngx_str_t *bucket,
-    const ngx_str_t *endpoint, ngx_http_complex_value_t *host,
+    const ngx_str_t *region, ngx_http_complex_value_t *host,
     ngx_http_complex_value_t *uri, const ngx_flag_t *convert_head)
 {
     ngx_str_t         local_signing_key;
@@ -863,46 +845,35 @@ ngx_http_proxy_auth_aws__sign(ngx_http_request_t *r,
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "generating aws host");
 
-    if (bucket->len == 0) {
+    if (host == NULL) {
+        safe_ngx_log_error(r, "host is not set");
+        return NULL;
+    }
 
-        if (host == NULL) {
-            safe_ngx_log_error(r, "host is not set");
-            return NULL;
-        }
-
-        if (ngx_http_complex_value(r, host, &compiled_host) != NGX_OK) {
-            safe_ngx_log_error(r, "failed to compile host complex value");
-            return NULL;
-        }
-
-    } else {
-        size_t host_len = bucket->len + 1 + endpoint->len;
-        compiled_host.data = ngx_pnalloc(r->pool, host_len);
-        if (compiled_host.data == NULL) {
-            safe_ngx_log_error(r, "failed to allocate memory for "
-                               "compiled_host");
-            return NULL;
-        }
-        compiled_host.len = ngx_snprintf(compiled_host.data, host_len,
-            "%V.%V", bucket, endpoint) - compiled_host.data;
+    if (ngx_http_complex_value(r, host, &compiled_host) != NGX_OK) {
+        safe_ngx_log_error(r, "failed to compile host complex value");
+        return NULL;
     }
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                    "generating uri");
 
+    ngx_str_null(&compiled_uri);
+
     if (uri != NULL) {
+        safe_ngx_log_error(r, "uri is not set");
+        return NULL;
+    }
 
-        if (ngx_http_complex_value(r, uri, &compiled_uri) != NGX_OK) {
-            safe_ngx_log_error(r, "failed to compile uri complex value");
-            return NULL;
-        }
+    if (ngx_http_complex_value(r, uri, &compiled_uri) != NGX_OK) {
+        safe_ngx_log_error(r, "failed to compile uri complex value");
+        return NULL;
+    }
 
-        if (compiled_uri.len == 0 || compiled_uri.data[0] != '/') {
-            safe_ngx_log_info(r, "compiled uri does not start with a slash, "
-                              "setting to empty value");
-            compiled_uri.len = 0;
-            compiled_uri.data = (u_char *)"";
-        }
+    if (compiled_uri.len == 0 || compiled_uri.data[0] != '/') {
+        safe_ngx_log_info(r, "compiled uri does not start with a slash");
+        compiled_uri.len = 1;
+        compiled_uri.data = (u_char *) "/";
     }
 
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,

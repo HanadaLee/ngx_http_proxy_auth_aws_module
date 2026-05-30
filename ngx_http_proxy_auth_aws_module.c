@@ -1,21 +1,26 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
+#if (NGX_HTTP_PROXY_FILTER)
+#include <ngx_http_proxy_filter_module.h>
+#endif
 #include "aws_functions.h"
 
+
+#if !(NGX_HTTP_PROXY_FILTER)
 
 #define NGX_HTTP_PROXY_AUTH_AWS_VAR_AUTHORIZATION          0
 #define NGX_HTTP_PROXY_AUTH_AWS_VAR_DATE                   1
 #define NGX_HTTP_PROXY_AUTH_AWS_VAR_CONTENT_SHA256         2
-#define NGX_HTTP_PROXY_AUTH_AWS_VAR_HOST                   3
 
 
 typedef struct {
     ngx_str_t                  authorization;
     ngx_str_t                  date;
     ngx_str_t                  content_sha256;
-    ngx_str_t                  host;
 } ngx_http_proxy_auth_aws_ctx_t;
+
+#endif
 
 
 typedef struct {
@@ -30,31 +35,55 @@ typedef struct {
     ngx_str_t                  secret_key;
     ngx_str_t                  region;
     ngx_str_t                  signing_key_decoded;
-    ngx_str_t                  endpoint;
-    ngx_str_t                  bucket;
 
     ngx_http_complex_value_t  *host;
     ngx_http_complex_value_t  *uri;
 } ngx_http_proxy_auth_aws_conf_t;
 
 
-static ngx_int_t ngx_http_proxy_auth_aws_add_variables(ngx_conf_t *cf);
-static ngx_int_t ngx_http_proxy_auth_aws_variables(ngx_http_request_t *r,
-    ngx_http_variable_value_t *v, uintptr_t data);
 static void *ngx_http_proxy_auth_aws_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf,
     void *parent, void *child);
+
+#if (NGX_HTTP_PROXY_FILTER)
+static ngx_int_t ngx_http_proxy_auth_aws_set_header(ngx_http_request_t *r,
+    ngx_list_t *headers, const ngx_str_t *key, ngx_uint_t hash,
+    ngx_str_t *value);
+static ngx_int_t ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
+    ngx_http_proxy_filter_ctx_t *ctx);
+#else
+static ngx_int_t ngx_http_proxy_auth_aws_add_variables(ngx_conf_t *cf);
+static ngx_int_t ngx_http_proxy_auth_aws_variables(ngx_http_request_t *r,
+    ngx_http_variable_value_t *v, uintptr_t data);
 static ngx_int_t ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r);
+#endif
+
+static ngx_int_t ngx_http_proxy_auth_aws_sign_headers(ngx_http_request_t *r,
+    const ngx_array_t **headers);
 static ngx_int_t ngx_http_proxy_auth_aws_init(ngx_conf_t *cf);
 
 
 static ngx_uint_t  ngx_http_proxy_auth_aws_authorization_hash;
 static ngx_uint_t  ngx_http_proxy_auth_aws_date_hash;
 static ngx_uint_t  ngx_http_proxy_auth_aws_content_sha256_hash;
-static ngx_uint_t  ngx_http_proxy_auth_aws_host_hash;
 
 
 static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
+
+    { ngx_string("proxy_auth_aws"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_flag_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_proxy_auth_aws_conf_t, enable),
+      NULL },
+
+    { ngx_string("proxy_auth_aws_bypass"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
+      ngx_http_set_predicate_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_proxy_auth_aws_conf_t, bypass),
+      NULL },
+
     { ngx_string("proxy_auth_aws_access_key"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_str_slot,
@@ -90,20 +119,6 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
       offsetof(ngx_http_proxy_auth_aws_conf_t, region),
       NULL },
 
-    { ngx_string("proxy_auth_aws_endpoint"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_str_slot,
-      NGX_HTTP_LOC_CONF_OFFSET,
-      offsetof(ngx_http_proxy_auth_aws_conf_t, endpoint),
-      NULL },
-
-    { ngx_string("proxy_auth_aws_bucket"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_str_slot,
-      NGX_HTTP_LOC_CONF_OFFSET,
-      offsetof(ngx_http_proxy_auth_aws_conf_t, bucket),
-      NULL },
-
     { ngx_string("proxy_auth_aws_host"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_http_set_complex_value_slot,
@@ -125,26 +140,16 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
       offsetof(ngx_http_proxy_auth_aws_conf_t, convert_head),
       NULL },
 
-    { ngx_string("proxy_auth_aws_bypass"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
-      ngx_http_set_predicate_slot,
-      NGX_HTTP_LOC_CONF_OFFSET,
-      offsetof(ngx_http_proxy_auth_aws_conf_t, bypass),
-      NULL },
-
-    { ngx_string("proxy_auth_aws"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
-      ngx_conf_set_flag_slot,
-      NGX_HTTP_LOC_CONF_OFFSET,
-      offsetof(ngx_http_proxy_auth_aws_conf_t, enable),
-      NULL },
-
       ngx_null_command
 };
 
 
 static ngx_http_module_t  ngx_http_proxy_auth_aws_module_ctx = {
+#if (NGX_HTTP_PROXY_FILTER)
+    NULL,                                       /* preconfiguration */
+#else
     ngx_http_proxy_auth_aws_add_variables,      /* preconfiguration */
+#endif
     ngx_http_proxy_auth_aws_init,               /* postconfiguration */
 
     NULL,                                       /* create main configuration */
@@ -174,6 +179,8 @@ ngx_module_t  ngx_http_proxy_auth_aws_module = {
 };
 
 
+#if !(NGX_HTTP_PROXY_FILTER)
+
 static ngx_http_variable_t  ngx_http_proxy_auth_aws_vars[] = {
 
     { ngx_string("proxy_auth_aws_authorization"), NULL,
@@ -189,11 +196,6 @@ static ngx_http_variable_t  ngx_http_proxy_auth_aws_vars[] = {
     { ngx_string("proxy_auth_aws_content_sha256"), NULL,
       ngx_http_proxy_auth_aws_variables,
       NGX_HTTP_PROXY_AUTH_AWS_VAR_CONTENT_SHA256,
-      NGX_HTTP_VAR_NOCACHEABLE, 0 },
-
-    { ngx_string("proxy_auth_aws_host"), NULL,
-      ngx_http_proxy_auth_aws_variables,
-      NGX_HTTP_PROXY_AUTH_AWS_VAR_HOST,
       NGX_HTTP_VAR_NOCACHEABLE, 0 },
 
       ngx_http_null_variable
@@ -320,6 +322,8 @@ ngx_http_proxy_auth_aws_variables(ngx_http_request_t *r,
     return NGX_OK;
 }
 
+#endif
+
 
 static void *
 ngx_http_proxy_auth_aws_create_loc_conf(ngx_conf_t *cf)
@@ -357,9 +361,6 @@ ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf, void *parent,
     ngx_conf_merge_str_value(conf->signing_key, prev->signing_key, "");
     ngx_conf_merge_str_value(conf->secret_key, prev->secret_key, "");
     ngx_conf_merge_str_value(conf->region, prev->region, "us-east-1");
-    ngx_conf_merge_str_value(conf->endpoint, prev->endpoint,
-        "s3.amazonaws.com");
-    ngx_conf_merge_str_value(conf->bucket, prev->bucket, "");
 
     ngx_conf_merge_ptr_value(conf->bypass, prev->bypass, NULL);
     ngx_conf_merge_ptr_value(conf->host, prev->host, NULL);
@@ -397,14 +398,10 @@ ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf, void *parent,
 
 
 static ngx_int_t
-ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
+ngx_http_proxy_auth_aws_sign_headers(ngx_http_request_t *r,
+    const ngx_array_t **headers)
 {
     ngx_http_proxy_auth_aws_conf_t   *conf;
-    ngx_http_proxy_auth_aws_ctx_t    *ctx;
-
-    ngx_table_elt_t          *h;
-    header_pair_t            *hv;
-    ngx_uint_t                i, j;
     const ngx_array_t        *signed_headers;
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_proxy_auth_aws_module);
@@ -435,8 +432,193 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
     signed_headers =
         ngx_http_proxy_auth_aws__sign(r, &conf->access_key,
             &conf->signing_key_decoded, &conf->key_scope, &conf->secret_key,
-            &conf->region, &conf->bucket, &conf->endpoint, conf->host,
-            conf->uri, &conf->convert_head);
+            &conf->region, conf->host, conf->uri, &conf->convert_head);
+    if (signed_headers == NULL) {
+        return NGX_ERROR;
+    }
+
+    *headers = signed_headers;
+
+    return NGX_OK;
+}
+
+
+#if (NGX_HTTP_PROXY_FILTER)
+
+static ngx_int_t
+ngx_http_proxy_auth_aws_set_header(ngx_http_request_t *r, ngx_list_t *headers,
+    const ngx_str_t *key, ngx_uint_t hash, ngx_str_t *value)
+{
+    ngx_uint_t        i;
+    ngx_uint_t        matched;
+    ngx_list_part_t  *part;
+    ngx_table_elt_t  *h;
+
+    matched = 0;
+    part = &headers->part;
+    h = part->elts;
+
+    for (i = 0; /* void */; i++) {
+
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                break;
+            }
+
+            part = part->next;
+            h = part->elts;
+            i = 0;
+        }
+
+        if (h[i].hash == 0) {
+            continue;
+        }
+
+        if (h[i].key.len != key->len) {
+            continue;
+        }
+
+        if (ngx_strncasecmp(h[i].key.data, key->data, key->len) != 0) {
+            continue;
+        }
+
+        if (matched) {
+            h[i].hash = 0;
+            h[i].value.len = 0;
+            h[i].next = NULL;
+            continue;
+        }
+
+        h[i].hash = hash;
+        h[i].key = *key;
+        h[i].value = *value;
+        matched = 1;
+    }
+
+    if (matched) {
+        return NGX_OK;
+    }
+
+    h = ngx_list_push(headers);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    ngx_memzero(h, sizeof(ngx_table_elt_t));
+
+    h->hash = hash;
+    h->key = *key;
+    h->value = *value;
+
+    h->lowcase_key = ngx_pnalloc(r->pool, h->key.len);
+    if (h->lowcase_key == NULL) {
+        h->hash = 0;
+        return NGX_ERROR;
+    }
+
+    ngx_strlow(h->lowcase_key, h->key.data, h->key.len);
+
+    h->next = NULL;
+
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
+    ngx_http_proxy_filter_ctx_t *filter_ctx)
+{
+    ngx_int_t           rc;
+    header_pair_t      *hv;
+    ngx_uint_t          i;
+    const ngx_array_t  *signed_headers;
+
+    if (filter_ctx->headers == NULL) {
+        return NGX_DECLINED;
+    }
+
+    rc = ngx_http_proxy_auth_aws_sign_headers(r, &signed_headers);
+
+    if (rc == NGX_ERROR) {
+        return NGX_ERROR;
+    }
+
+    if (rc == NGX_DECLINED) {
+        return NGX_DECLINED;
+    }
+
+    for (i = 0; i < signed_headers->nelts; i++) {
+        hv = (header_pair_t *) ((u_char *) signed_headers->elts
+                                + (signed_headers->size * i));
+
+        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                "header name: %s, value: %s", hv->key.data, hv->value.data);
+
+        if (ngx_strncmp(hv->key.data, AUTHZ_HEADER.data, hv->key.len) == 0) {
+            if (ngx_http_proxy_auth_aws_set_header(r, filter_ctx->headers,
+                    &AUTHZ_HEADER, ngx_http_proxy_auth_aws_authorization_hash,
+                    &hv->value)
+                != NGX_OK)
+            {
+                return NGX_ERROR;
+            }
+
+            continue;
+        }
+
+        if (ngx_strncmp(hv->key.data, AMZ_DATE_HEADER.data, hv->key.len) == 0) {
+            if (ngx_http_proxy_auth_aws_set_header(r, filter_ctx->headers,
+                    &AMZ_DATE_HEADER, ngx_http_proxy_auth_aws_date_hash,
+                    &hv->value)
+                != NGX_OK)
+            {
+                return NGX_ERROR;
+            }
+
+            continue;
+        }
+
+        if (ngx_strncmp(hv->key.data, AMZ_HASH_HEADER.data, hv->key.len) == 0) {
+            if (ngx_http_proxy_auth_aws_set_header(r, filter_ctx->headers,
+                    &AMZ_HASH_HEADER,
+                    ngx_http_proxy_auth_aws_content_sha256_hash, &hv->value)
+                != NGX_OK)
+            {
+                return NGX_ERROR;
+            }
+
+            continue;
+        }
+    }
+
+    return NGX_DECLINED;
+}
+
+#else
+
+static ngx_int_t
+ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
+{
+    ngx_http_proxy_auth_aws_ctx_t  *ctx;
+    ngx_int_t                       rc;
+    header_pair_t                  *hv;
+    ngx_uint_t                      i;
+    const ngx_array_t              *signed_headers;
+
+    ctx = ngx_http_get_module_ctx(r, ngx_http_proxy_auth_aws_module);
+    if (ctx) {
+        return NGX_DECLINED;
+    }
+
+    rc = ngx_http_proxy_auth_aws_sign_headers(r, &signed_headers);
+
+    if (rc == NGX_DECLINED) {
+        return NGX_DECLINED;
+    }
+
+    if (rc != NGX_OK) {
+        return rc;
+    }
 
     ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_proxy_auth_aws_ctx_t));
     if (ctx == NULL) {
@@ -448,7 +630,7 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
                                 + (signed_headers->size * i));
 
         ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                "header name %s, value %s", hv->key.data, hv->value.data);
+                "header name: %s, value: %s", hv->key.data, hv->value.data);
 
         if (ngx_strncmp(hv->key.data, AMZ_HASH_HEADER.data, hv->key.len) == 0) {
             ctx->content_sha256.len = hv->value.len;
@@ -459,12 +641,6 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
         if (ngx_strncmp(hv->key.data, AMZ_DATE_HEADER.data, hv->key.len) == 0) {
             ctx->date.len = hv->value.len;
             ctx->date.data = hv->value.data;
-            continue;
-        }
-
-        if (ngx_strncmp(hv->key.data, HOST_HEADER.data, hv->key.len) == 0) {
-            ctx->host.len = hv->value.len;
-            ctx->host.data = hv->value.data;
             continue;
         }
 
@@ -480,12 +656,19 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
     return NGX_DECLINED;
 }
 
+#endif
+
 
 static ngx_int_t
 ngx_http_proxy_auth_aws_init(ngx_conf_t *cf)
 {
+#if (NGX_HTTP_PROXY_FILTER)
+    ngx_http_proxy_filter_pt          *h;
+    ngx_http_proxy_filter_main_conf_t *pmcf;
+#else
     ngx_http_handler_pt        *h;
     ngx_http_core_main_conf_t  *cmcf;
+#endif
 
     ngx_http_proxy_auth_aws_authorization_hash =
         ngx_hash_key(AUTHZ_HEADER.data, AUTHZ_HEADER.len);
@@ -496,9 +679,22 @@ ngx_http_proxy_auth_aws_init(ngx_conf_t *cf)
     ngx_http_proxy_auth_aws_content_sha256_hash =
         ngx_hash_key(AMZ_HASH_HEADER.data, AMZ_HASH_HEADER.len);
 
-    ngx_http_proxy_auth_aws_host_hash =
-        ngx_hash_key(HOST_HEADER.data, HOST_HEADER.len);
+#if (NGX_HTTP_PROXY_FILTER)
+    pmcf = ngx_http_conf_get_module_main_conf(cf,
+                                              ngx_http_proxy_filter_module);
+    if (pmcf == NULL) {
+        return NGX_ERROR;
+    }
 
+    h = ngx_array_push(&pmcf->phases[NGX_HTTP_PROXY_REQUEST_FILTER]);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    *h = ngx_http_proxy_auth_aws_request_filter;
+
+    return NGX_OK;
+#else
     cmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_core_module);
 
     h = ngx_array_push(&cmcf->phases[NGX_HTTP_PRECONTENT_PHASE].handlers);
@@ -509,4 +705,5 @@ ngx_http_proxy_auth_aws_init(ngx_conf_t *cf)
     *h = ngx_http_proxy_auth_aws_handler;
 
     return NGX_OK;
+#endif
 }

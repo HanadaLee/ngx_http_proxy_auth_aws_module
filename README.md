@@ -4,7 +4,7 @@ This nginx module can proxy requests to authenticated S3 backends using Amazon's
 V4 authentication API. The first version of this module was written for the V2
 authentication protocol and can be found in the *AuthV2* branch.
 
-This fork changes the processing phase to NGX_HTTP_PRECONTENT_PHASE, so subrequests can also use this module to generate authentication headers normally. In addition, some directives and functions are added according to actual usage needs.
+When built without ngx_http_proxy_filter_module, this module runs in NGX_HTTP_PRECONTENT_PHASE and exposes variables for proxy_set_header. When NGX_HTTP_PROXY_FILTER is available, it registers a proxy request filter and writes the AWS headers directly to the outbound proxy header list.
 
 ## License
 This project uses the same license as ngnix does i.e. the 2 clause BSD / simplified BSD / FreeBSD license
@@ -31,14 +31,14 @@ Implements proxying of authenticated requests to S3.
       proxy_auth_aws_access_key your_aws_access_key; # Example AKIDEXAMPLE
       proxy_auth_aws_key_scope scope_of_generated_signing_key; #Example 20150830/us-east-1/service/aws4_request
       proxy_auth_aws_signing_key signing_key_generated_using_script; #Example L4vRLWAO92X5L3Sqk5QydUSdB0nC9+1wfqLMOKLbRp4=
-      proxy_auth_aws_bucket your_s3_bucket;
-      proxy_auth_aws_endpoint s3.amazonaws.com;
+      proxy_auth_aws_host your_s3_bucket.s3.amazonaws.com;
 
-      # This is an example that specific upstream headers
+      # Without NGX_HTTP_PROXY_FILTER, set the generated headers explicitly.
+      # With NGX_HTTP_PROXY_FILTER, these three headers are set directly.
       proxy_set_header Authorization $proxy_auth_aws_authorization;
       proxy_set_header X-Amz-Date $proxy_auth_aws_date;
       proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;
-      proxy_set_header Host $proxy_auth_aws_host;
+      proxy_set_header Host your_s3_bucket.s3.amazonaws.com;
     
       proxy_pass http://your_s3_bucket.s3.amazonaws.com;
     }
@@ -52,37 +52,35 @@ Implements proxying of authenticated requests to S3.
       proxy_auth_aws_access_key your_aws_access_key;
       proxy_auth_aws_key_scope scope_of_generated_signing_key;
       proxy_auth_aws_signing_key signing_key_generated_using_script;
-      proxy_auth_aws_bucket your_s3_bucket;
+      proxy_auth_aws_host your_s3_bucket.s3.amazonaws.com;
 
       # This is an example that specific upstream headers
       proxy_set_header Authorization $proxy_auth_aws_authorization;
       proxy_set_header X-Amz-Date $proxy_auth_aws_date;
       proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;
-      proxy_set_header Host $proxy_auth_aws_host;
+      proxy_set_header Host your_s3_bucket.s3.amazonaws.com;
     }
 
-    # This is an example that use specific s3 endpoint, default endpoint is s3.amazonaws.com
+    # This is an example that uses a specific S3 endpoint.
     location /s3_beijing {
 
       rewrite /s3_beijing/(.*) /$1 break;
       proxy_pass http://your_s3_bucket.s3.cn-north-1.amazonaws.com.cn/$1;
 
       proxy_auth_aws on;
-      proxy_auth_aws_endpoint s3.cn-north-1.amazonaws.com.cn;
       proxy_auth_aws_access_key your_aws_access_key;
       proxy_auth_aws_key_scope scope_of_generated_signing_key;
       proxy_auth_aws_signing_key signing_key_generated_using_script;
-      proxy_auth_aws_bucket your_s3_bucket;
+      proxy_auth_aws_host your_s3_bucket.s3.cn-north-1.amazonaws.com.cn;
 
       # This is an example that specific upstream headers
       proxy_set_header Authorization $proxy_auth_aws_authorization;
       proxy_set_header X-Amz-Date $proxy_auth_aws_date;
       proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;
-      proxy_set_header Host $proxy_auth_aws_host;
+      proxy_set_header Host your_s3_bucket.s3.cn-north-1.amazonaws.com.cn;
     }
 
     # This is an example that specific upstream host and uri
-    # Be careful not to use proxy_auth_aws_host and proxy_auth_aws_bucket + proxy_auth_aws_endpoint at the same time, proxy_auth_aws_bucket + proxy_auth_aws_endpoint will have higher priority.
     location /s3_beijing_2 {
       set $upstream_host your_s3_bucket.s3.cn-north-1.amazonaws.com.cn;
       set $upstream_uri /test.txt;
@@ -99,8 +97,6 @@ Implements proxying of authenticated requests to S3.
       proxy_set_header X-Amz-Date $proxy_auth_aws_date;
       proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;
 
-      # use $upstream_host instead of $proxy_auth_aws_host 
-      # it doesn't matter if you use $proxy_auth_aws_host, as $proxy_auth_aws_host will be consistent with $upstream_host
       proxy_set_header Host $upstream_host;
     }
 
@@ -111,14 +107,13 @@ Implements proxying of authenticated requests to S3.
       proxy_auth_aws_access_key your_aws_access_key; # Example AKIDEXAMPLE
       proxy_auth_aws_secret_key your_aws_secret_key; # Example LTAxxxxxxxx
       proxy_auth_aws_region cn-north-1;
-      proxy_auth_aws_endpoint s3.cn-north-1.amazonaws.com.cn;
-      proxy_auth_aws_bucket your_s3_bucket;
+      proxy_auth_aws_host your_s3_bucket.s3.cn-north-1.amazonaws.com.cn;
 
       # This is an example that specific upstream headers
       proxy_set_header Authorization $proxy_auth_aws_authorization;
       proxy_set_header X-Amz-Date $proxy_auth_aws_date;
       proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;
-      proxy_set_header Host $proxy_auth_aws_host;
+      proxy_set_header Host your_s3_bucket.s3.cn-north-1.amazonaws.com.cn;
 
       proxy_pass http://your_s3_bucket.s3.amazonaws.com;
     }
