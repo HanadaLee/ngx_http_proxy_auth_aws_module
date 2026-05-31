@@ -32,10 +32,10 @@ vendor/cmocka:
 test: .cmocka_build | nginx
 	strip -N main -o ${NGX_PATH}/objs/src/core/nginx_without_main.o ${NGX_PATH}/objs/src/core/nginx.o \
 	&& mv ${NGX_PATH}/objs/src/core/nginx_without_main.o ${NGX_PATH}/objs/src/core/nginx.o \
-	&& $(CC) test_suite.c $(CFLAGS) -o test_suite -lcmocka `find ${NGX_PATH}/objs -name \*.o` -ldl -lpthread -lcrypt -lssl -lpcre -lcrypto -lz \
-	&& ./test_suite
+	&& $(CC) ngx_http_proxy_auth_aws_test.c $(CFLAGS) -o ngx_http_proxy_auth_aws_test -lcmocka `find ${NGX_PATH}/objs -name \*.o` -ldl -lpthread -lcrypt -lssl -lpcre -lcrypto -lz \
+	&& ./ngx_http_proxy_auth_aws_test
 
 clean:
-	rm -f *.o test_suite
+	rm -f *.o ngx_http_proxy_auth_aws_test
 
 # vim: ft=make ts=8 sw=8 noet

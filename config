@@ -4,13 +4,18 @@ if test -n "$ngx_module_link"; then
     ngx_module_type=HTTP
     ngx_module_name=ngx_http_proxy_auth_aws_module
     ngx_module_incs=
-    ngx_module_deps=
-    ngx_module_srcs="$ngx_addon_dir/ngx_http_proxy_auth_aws_module.c $ngx_addon_dir/crypto_helper_openssl.c"
+    ngx_module_deps="$ngx_addon_dir/ngx_http_proxy_auth_aws_functions.h"
+    ngx_module_deps="$ngx_module_deps $ngx_addon_dir/ngx_http_proxy_auth_aws_crypto.h"
+    ngx_module_srcs="$ngx_addon_dir/ngx_http_proxy_auth_aws_module.c"
+    ngx_module_srcs="$ngx_module_srcs $ngx_addon_dir/ngx_http_proxy_auth_aws_functions.c"
+    ngx_module_srcs="$ngx_module_srcs $ngx_addon_dir/ngx_http_proxy_auth_aws_crypto_openssl.c"
     ngx_module_libs="$CORE_LIBS -lssl -lcrypto"
 
     . auto/module
 else
-   HTTP_MODULES="$HTTP_MODULES ngx_http_proxy_auth_aws_module"
-   NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_http_proxy_auth_aws_module.c $ngx_addon_dir/crypto_helper_openssl.c"
-   CORE_LIBS="$CORE_LIBS -lssl -lcrypto"
+    HTTP_MODULES="$HTTP_MODULES ngx_http_proxy_auth_aws_module"
+    NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_http_proxy_auth_aws_module.c"
+    NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_http_proxy_auth_aws_functions.c"
+    NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/ngx_http_proxy_auth_aws_crypto_openssl.c"
+    CORE_LIBS="$CORE_LIBS -lssl -lcrypto"
 fi

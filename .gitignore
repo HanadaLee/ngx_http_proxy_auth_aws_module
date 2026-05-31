@@ -1,2 +1,2 @@
 /.cmocka_build
-/test_suite
+/ngx_http_proxy_auth_aws_test
