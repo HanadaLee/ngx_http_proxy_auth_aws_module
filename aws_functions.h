@@ -860,7 +860,7 @@ ngx_http_proxy_auth_aws__sign(ngx_http_request_t *r,
 
     ngx_str_null(&compiled_uri);
 
-    if (uri != NULL) {
+    if (uri == NULL) {
         safe_ngx_log_error(r, "uri is not set");
         return NULL;
     }
