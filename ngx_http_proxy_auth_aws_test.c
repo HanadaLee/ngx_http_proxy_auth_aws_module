@@ -1,3 +1,7 @@
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>

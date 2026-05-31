@@ -1,7 +1,6 @@
 #ifndef NGX_HTTP_PROXY_AUTH_AWS_FUNCTIONS_H_INCLUDED
 #define NGX_HTTP_PROXY_AUTH_AWS_FUNCTIONS_H_INCLUDED
 
-#include <time.h>
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>

@@ -13,7 +13,6 @@
  * (3) All heap allocation must be done using ngx_pool_t instead of malloc.
  */
 
-#include <time.h>
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
