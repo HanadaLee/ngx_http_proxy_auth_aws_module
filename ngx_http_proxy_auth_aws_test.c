@@ -237,7 +237,6 @@ static void canonical_request_sans_qs(void **state)
     const ngx_str_t aws_date = ngx_string("20160221T063112Z");
     const ngx_str_t url = ngx_string("/");
     const ngx_str_t method = ngx_string("GET");
-    const ngx_flag_t convert_head = 0;
 
     ngx_http_proxy_auth_aws_canon_req_t result;
 
@@ -247,7 +246,7 @@ static void canonical_request_sans_qs(void **state)
     r->connection = NULL;
 
     result = ngx_http_proxy_auth_aws_make_canonical_request(r, &host, NULL,
-        &aws_date, &convert_head);
+        &aws_date, &method);
     assert_string_equal(result.canon_request->data,
         "GET\n/\n\n"
         "host:example.s3.amazonaws.com\n"
@@ -267,7 +266,6 @@ static void basic_get_signature(void **state)
     const ngx_str_t key_scope =
         ngx_string("20150830/us-east-1/service/aws4_request");
     const ngx_str_t host = ngx_string("example.s3.amazonaws.com");
-    const ngx_flag_t convert_head = 0;
 
     ngx_str_t signing_key, signing_key_b64e =
         ngx_string("k4EntTNoEN22pdavRF/KyeNx+e1BjtOGsCKu2CkBvnU=");
@@ -285,7 +283,7 @@ static void basic_get_signature(void **state)
     ngx_http_proxy_auth_aws_signed_req_t result =
         ngx_http_proxy_auth_aws_compute_signature(r,
                                 &signing_key, &key_scope, &host, NULL,
-                                &convert_head);
+                                &method);
     assert_string_equal(result.signature->data,
         "4ed4ec875ff02e55c7903339f4f24f8780b986a9cc9eff03f324d31da6a57690");
 }

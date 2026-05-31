@@ -59,7 +59,7 @@ const ngx_str_t *ngx_http_proxy_auth_aws_canon_uri(ngx_http_request_t *r,
 ngx_http_proxy_auth_aws_canon_req_t
 ngx_http_proxy_auth_aws_make_canonical_request(ngx_http_request_t *r,
     const ngx_str_t *host, const ngx_str_t *uri, const ngx_str_t *amz_date,
-    const ngx_flag_t *convert_head);
+    const ngx_str_t *method);
 const ngx_str_t *ngx_http_proxy_auth_aws_string_to_sign(ngx_http_request_t *r,
     const ngx_str_t *key_scope, const ngx_str_t *date,
     const ngx_str_t *canon_request_hash);
@@ -69,7 +69,7 @@ const ngx_str_t *ngx_http_proxy_auth_aws_make_auth_token(ngx_http_request_t *r,
 ngx_http_proxy_auth_aws_signed_req_t ngx_http_proxy_auth_aws_compute_signature(
     ngx_http_request_t *r, const ngx_str_t *signing_key,
     const ngx_str_t *key_scope, const ngx_str_t *host,
-    const ngx_str_t *uri, const ngx_flag_t *convert_head);
+    const ngx_str_t *uri, const ngx_str_t *method);
 ngx_int_t ngx_http_proxy_auth_aws_generate_signing_key(ngx_http_request_t *r,
     const ngx_str_t *secret_key, const ngx_str_t *region,
     ngx_str_t *signature_key, ngx_str_t *key_scope);
@@ -77,7 +77,7 @@ const ngx_array_t *ngx_http_proxy_auth_aws_sign(ngx_http_request_t *r,
     const ngx_str_t *access_key, const ngx_str_t *signing_key,
     const ngx_str_t *key_scope, const ngx_str_t *secret_key,
     const ngx_str_t *region, ngx_http_complex_value_t *host,
-    ngx_http_complex_value_t *uri, const ngx_flag_t *convert_head);
+    ngx_http_complex_value_t *uri, const ngx_str_t *method);
 
 
 #endif /* NGX_HTTP_PROXY_AUTH_AWS_FUNCTIONS_H_INCLUDED */

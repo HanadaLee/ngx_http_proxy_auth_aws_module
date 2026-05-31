@@ -17,7 +17,8 @@ Implements proxying of authenticated requests to S3.
   server {
     listen     8000;
 
-    # proxy_auth_aws_convert_head is on by default.
+    # With NGX_HTTP_PROXY_FILTER, the module uses the upstream request method directly.
+    # Without NGX_HTTP_PROXY_FILTER, proxy_auth_aws_convert_head is on by default.
     # If you set `proxy_cache_convert_head` to off, or the `proxy_cache` function is not enabled, please also set `proxy_auth_aws_convert_head` to off. Otherwise, the HEAD request may be intercepted.
     # Do not use `proxy_method` directive, it will cause the authentication calculation result to be inconsistent with the actual upstream request.
     # proxy_cache_convert_head off;
