@@ -542,7 +542,7 @@ ngx_http_proxy_auth_aws_set_header(ngx_http_request_t *r, ngx_list_t *headers,
 
 static ngx_int_t
 ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
-    ngx_http_proxy_filter_ctx_t *filter_ctx)
+    ngx_http_proxy_filter_ctx_t *ctx)
 {
     ngx_http_proxy_auth_aws_conf_t *conf;
     ngx_uint_t                      i;
@@ -552,7 +552,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
     ngx_list_part_t                *part;
     ngx_table_elt_t                *h;
 
-    if (filter_ctx->headers == NULL) {
+    if (ctx->headers == NULL) {
         return NGX_DECLINED;
     }
 
@@ -574,7 +574,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
         break;
     }
 
-    if (ngx_http_proxy_filter_get_method(r, filter_ctx, &method) != NGX_OK) {
+    if (ngx_http_proxy_filter_get_method(r, ctx, &method) != NGX_OK) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                       "proxy_auth_aws: failed to get method");
         return NGX_ERROR;
@@ -589,7 +589,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
 
     host.len = 0;
     host.data = NULL;
-    part = &filter_ctx->headers->part;
+    part = &ctx->headers->part;
     h = part->elts;
 
     for (i = 0; /* void */; i++) {
@@ -623,7 +623,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
         return NGX_ERROR;
     }
 
-    if (ngx_http_proxy_filter_get_uri(r, filter_ctx, &uri) != NGX_OK) {
+    if (ngx_http_proxy_filter_get_uri(r, ctx, &uri) != NGX_OK) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                       "proxy_auth_aws: failed to get uri");
         return NGX_ERROR;
@@ -647,7 +647,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
                 &ngx_http_proxy_auth_aws_authz_header)
             == NGX_OK)
         {
-            if (ngx_http_proxy_auth_aws_set_header(r, filter_ctx->headers,
+            if (ngx_http_proxy_auth_aws_set_header(r, ctx->headers,
                     &ngx_http_proxy_auth_aws_authz_header,
                     ngx_http_proxy_auth_aws_authorization_hash,
                     &header->value)
@@ -663,7 +663,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
                 &ngx_http_proxy_auth_aws_amz_date_header)
             == NGX_OK)
         {
-            if (ngx_http_proxy_auth_aws_set_header(r, filter_ctx->headers,
+            if (ngx_http_proxy_auth_aws_set_header(r, ctx->headers,
                     &ngx_http_proxy_auth_aws_amz_date_header,
                     ngx_http_proxy_auth_aws_date_hash,
                     &header->value)
@@ -679,7 +679,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
                 &ngx_http_proxy_auth_aws_amz_hash_header)
             == NGX_OK)
         {
-            if (ngx_http_proxy_auth_aws_set_header(r, filter_ctx->headers,
+            if (ngx_http_proxy_auth_aws_set_header(r, ctx->headers,
                     &ngx_http_proxy_auth_aws_amz_hash_header,
                     ngx_http_proxy_auth_aws_content_sha256_hash,
                     &header->value)
