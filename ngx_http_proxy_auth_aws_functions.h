@@ -31,12 +31,12 @@ typedef struct {
 } ngx_http_proxy_auth_aws_signed_req_t;
 
 
-extern const ngx_str_t  ngx_http_proxy_auth_aws_empty_string_sha256;
-extern const ngx_str_t  ngx_http_proxy_auth_aws_empty_string;
-extern const ngx_str_t  ngx_http_proxy_auth_aws_amz_hash_header;
-extern const ngx_str_t  ngx_http_proxy_auth_aws_amz_date_header;
-extern const ngx_str_t  ngx_http_proxy_auth_aws_host_header;
-extern const ngx_str_t  ngx_http_proxy_auth_aws_authz_header;
+extern ngx_str_t  ngx_http_proxy_auth_aws_empty_string_sha256;
+extern ngx_str_t  ngx_http_proxy_auth_aws_empty_string;
+extern ngx_str_t  ngx_http_proxy_auth_aws_amz_hash_header;
+extern ngx_str_t  ngx_http_proxy_auth_aws_amz_date_header;
+extern ngx_str_t  ngx_http_proxy_auth_aws_host_header;
+extern ngx_str_t  ngx_http_proxy_auth_aws_authz_header;
 
 
 ngx_str_t *ngx_http_proxy_auth_aws_compute_request_time(ngx_http_request_t *r,

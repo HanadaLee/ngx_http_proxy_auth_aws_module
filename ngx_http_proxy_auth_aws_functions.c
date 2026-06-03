@@ -58,16 +58,16 @@
     } while (0)
 
 
-const ngx_str_t  ngx_http_proxy_auth_aws_empty_string_sha256 =
+ngx_str_t  ngx_http_proxy_auth_aws_empty_string_sha256 =
     ngx_string("e3b0c44298fc1c149afbf4c8996fb92"
                "427ae41e4649b934ca495991b7852b855");
-const ngx_str_t  ngx_http_proxy_auth_aws_empty_string = ngx_null_string;
-const ngx_str_t  ngx_http_proxy_auth_aws_amz_hash_header =
+ngx_str_t  ngx_http_proxy_auth_aws_empty_string = ngx_null_string;
+ngx_str_t  ngx_http_proxy_auth_aws_amz_hash_header =
     ngx_string("x-amz-content-sha256");
-const ngx_str_t  ngx_http_proxy_auth_aws_amz_date_header =
+ngx_str_t  ngx_http_proxy_auth_aws_amz_date_header =
     ngx_string("x-amz-date");
-const ngx_str_t  ngx_http_proxy_auth_aws_host_header = ngx_string("host");
-const ngx_str_t  ngx_http_proxy_auth_aws_authz_header =
+ngx_str_t  ngx_http_proxy_auth_aws_host_header = ngx_string("host");
+ngx_str_t  ngx_http_proxy_auth_aws_authz_header =
     ngx_string("authorization");
 
 
@@ -578,7 +578,7 @@ ngx_http_proxy_auth_aws_canon_uri(ngx_http_request_t *r, ngx_str_t *path)
 {
     ngx_str_t      *retval;
     u_char         *src, *dst;
-    const u_char   *uri_data;
+    u_char         *uri_data;
     size_t          uri_len;
 
     if (path->len != 0) {
