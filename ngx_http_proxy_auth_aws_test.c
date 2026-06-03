@@ -29,7 +29,7 @@ static void null_test_success(void **state)
 static void x_amz_date(void **state)
 {
     time_t t;
-    const ngx_str_t* date;
+    ngx_str_t       *date;
 
     (void) state; /* unused */
 
@@ -132,7 +132,7 @@ static void canonical_qs_empty(void **state)
     r->args = ngx_http_proxy_auth_aws_empty_string;
     r->connection = NULL;
 
-    const ngx_str_t *canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r,
+    ngx_str_t *canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r,
         &r->args);
     assert_ngx_string_equal(*canon_qs, ngx_http_proxy_auth_aws_empty_string);
 }
@@ -144,7 +144,7 @@ static void canonical_qs_single_arg(void **state)
     r->args = args;
     r->connection = NULL;
 
-    const ngx_str_t *canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r,
+    ngx_str_t *canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r,
         &r->args);
     assert_ngx_string_equal(*canon_qs, args);
 }
@@ -157,7 +157,7 @@ static void canonical_qs_two_arg_reverse(void **state)
     r->args = args;
     r->connection = NULL;
 
-    const ngx_str_t *canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r,
+    ngx_str_t *canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r,
         &r->args);
     assert_ngx_string_equal(*canon_qs, cargs);
 }
@@ -170,7 +170,7 @@ static void canonical_qs_subrequest(void **state)
     r->args = args;
     r->connection = NULL;
 
-    const ngx_str_t *canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r,
+    ngx_str_t *canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r,
         &r->args);
     assert_ngx_string_equal(*canon_qs, cargs);
 }
@@ -186,7 +186,7 @@ static void canonical_url_sans_qs(void **state)
     r->args = ngx_http_proxy_auth_aws_empty_string;
     r->connection = NULL;
 
-    const ngx_str_t *canon_url = ngx_http_proxy_auth_aws_canon_uri(r,
+    ngx_str_t *canon_url = ngx_http_proxy_auth_aws_canon_uri(r,
         &ngx_http_proxy_auth_aws_empty_string);
     assert_int_equal(canon_url->len, url.len);
     assert_ngx_string_equal(*canon_url, url);
@@ -209,7 +209,7 @@ static void canonical_url_with_qs(void **state)
     r->args = args;
     r->connection = NULL;
 
-    const ngx_str_t *canon_url = ngx_http_proxy_auth_aws_canon_uri(r,
+    ngx_str_t *canon_url = ngx_http_proxy_auth_aws_canon_uri(r,
         &ngx_http_proxy_auth_aws_empty_string);
     assert_int_equal(canon_url->len, curl.len);
     assert_ngx_string_equal(*canon_url, curl);
@@ -228,7 +228,7 @@ static void canonical_url_with_special_chars(void **state)
     r->args = ngx_http_proxy_auth_aws_empty_string;
     r->connection = NULL;
 
-    const ngx_str_t *canon_url = ngx_http_proxy_auth_aws_canon_uri(r,
+    ngx_str_t *canon_url = ngx_http_proxy_auth_aws_canon_uri(r,
         &ngx_http_proxy_auth_aws_empty_string);
     assert_int_equal(canon_url->len, expected_canon_url.len);
     assert_ngx_string_equal(*canon_url, expected_canon_url);
@@ -237,10 +237,10 @@ static void canonical_url_with_special_chars(void **state)
 static void canonical_request_sans_qs(void **state)
 {
     (void) state; /* unused */
-    const ngx_str_t host = ngx_string("example.s3.amazonaws.com");
-    const ngx_str_t aws_date = ngx_string("20160221T063112Z");
-    const ngx_str_t url = ngx_string("/");
-    const ngx_str_t method = ngx_string("GET");
+    ngx_str_t host = ngx_string("example.s3.amazonaws.com");
+    ngx_str_t aws_date = ngx_string("20160221T063112Z");
+    ngx_str_t url = ngx_string("/");
+    ngx_str_t method = ngx_string("GET");
 
     ngx_http_proxy_auth_aws_canon_req_t result;
 
@@ -265,11 +265,11 @@ static void basic_get_signature(void **state)
 {
     (void) state; /* unused */
 
-    const ngx_str_t url = ngx_string("/");
-    const ngx_str_t method = ngx_string("GET");
-    const ngx_str_t key_scope =
+    ngx_str_t url = ngx_string("/");
+    ngx_str_t method = ngx_string("GET");
+    ngx_str_t key_scope =
         ngx_string("20150830/us-east-1/service/aws4_request");
-    const ngx_str_t host = ngx_string("example.s3.amazonaws.com");
+    ngx_str_t host = ngx_string("example.s3.amazonaws.com");
 
     ngx_str_t signing_key, signing_key_b64e =
         ngx_string("k4EntTNoEN22pdavRF/KyeNx+e1BjtOGsCKu2CkBvnU=");

@@ -38,8 +38,10 @@ typedef struct {
     ngx_str_t                  region;
     ngx_str_t                  signing_key_decoded;
 
+#if !(NGX_HTTP_PROXY_FILTER)
     ngx_http_complex_value_t  *host;
     ngx_http_complex_value_t  *uri;
+#endif
 } ngx_http_proxy_auth_aws_conf_t;
 
 
@@ -49,7 +51,7 @@ static char *ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf,
 
 #if (NGX_HTTP_PROXY_FILTER)
 static ngx_int_t ngx_http_proxy_auth_aws_set_header(ngx_http_request_t *r,
-    ngx_list_t *headers, const ngx_str_t *key, ngx_uint_t hash,
+    ngx_list_t *headers, ngx_str_t *key, ngx_uint_t hash,
     ngx_str_t *value);
 static ngx_int_t ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
     ngx_http_proxy_filter_ctx_t *ctx);
@@ -61,10 +63,11 @@ static ngx_int_t ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r);
 #endif
 
 static ngx_int_t ngx_http_proxy_auth_aws_sign_headers(ngx_http_request_t *r,
-    ngx_http_proxy_auth_aws_conf_t *conf, const ngx_str_t *method,
-    const ngx_array_t **headers);
-static ngx_int_t ngx_http_proxy_auth_aws_header_name_eq(const ngx_str_t *key,
-    const ngx_str_t *name);
+    ngx_http_proxy_auth_aws_conf_t *conf, ngx_str_t *host,
+    ngx_str_t *uri, ngx_str_t *method,
+    ngx_array_t **headers);
+static ngx_int_t ngx_http_proxy_auth_aws_header_name_eq(ngx_str_t *key,
+    ngx_str_t *name);
 static ngx_int_t ngx_http_proxy_auth_aws_init(ngx_conf_t *cf);
 
 
@@ -124,6 +127,8 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
       offsetof(ngx_http_proxy_auth_aws_conf_t, region),
       NULL },
 
+#if !(NGX_HTTP_PROXY_FILTER)
+
     { ngx_string("proxy_auth_aws_host"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_http_set_complex_value_slot,
@@ -137,6 +142,8 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_proxy_auth_aws_conf_t, uri),
       NULL },
+
+#endif
 
 #if !(NGX_HTTP_PROXY_FILTER) && (NGX_HTTP_CACHE)
     { ngx_string("proxy_auth_aws_convert_head"),
@@ -165,8 +172,8 @@ static ngx_http_module_t  ngx_http_proxy_auth_aws_module_ctx = {
     NULL,                                       /* create server configuration */
     NULL,                                       /* merge server configuration */
 
-    ngx_http_proxy_auth_aws_create_loc_conf,    /* create location configuration */
-    ngx_http_proxy_auth_aws_merge_loc_conf      /* merge location configuration */
+    ngx_http_proxy_auth_aws_create_loc_conf,    /* create loc conf */
+    ngx_http_proxy_auth_aws_merge_loc_conf      /* merge loc conf */
 };
 
 
@@ -236,7 +243,7 @@ ngx_http_proxy_auth_aws_variables(ngx_http_request_t *r,
     ngx_list_part_t                *part;
     ngx_table_elt_t                *header;
     ngx_uint_t                      i;
-    const ngx_str_t                *name;
+    ngx_str_t                      *name;
     ngx_uint_t                      hash;
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_proxy_auth_aws_module);
@@ -347,8 +354,10 @@ ngx_http_proxy_auth_aws_create_loc_conf(ngx_conf_t *cf)
     conf->convert_head = NGX_CONF_UNSET;
 #endif
 
+#if !(NGX_HTTP_PROXY_FILTER)
     conf->host = NGX_CONF_UNSET_PTR;
     conf->uri = NGX_CONF_UNSET_PTR;
+#endif
 
     return conf;
 }
@@ -373,8 +382,10 @@ ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf, void *parent,
     ngx_conf_merge_str_value(conf->region, prev->region, "us-east-1");
 
     ngx_conf_merge_ptr_value(conf->bypass, prev->bypass, NULL);
+#if !(NGX_HTTP_PROXY_FILTER)
     ngx_conf_merge_ptr_value(conf->host, prev->host, NULL);
     ngx_conf_merge_ptr_value(conf->uri, prev->uri, NULL);
+#endif
 
     if (conf->signing_key.len != 0) {
 
@@ -408,8 +419,8 @@ ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf, void *parent,
 
 
 static ngx_int_t
-ngx_http_proxy_auth_aws_header_name_eq(const ngx_str_t *key,
-    const ngx_str_t *name)
+ngx_http_proxy_auth_aws_header_name_eq(ngx_str_t *key,
+    ngx_str_t *name)
 {
     if (key->len != name->len) {
         return NGX_DECLINED;
@@ -429,44 +440,15 @@ ngx_http_proxy_auth_aws_header_name_eq(const ngx_str_t *key,
 
 static ngx_int_t
 ngx_http_proxy_auth_aws_sign_headers(ngx_http_request_t *r,
-    ngx_http_proxy_auth_aws_conf_t *conf, const ngx_str_t *method,
-    const ngx_array_t **headers)
+    ngx_http_proxy_auth_aws_conf_t *conf, ngx_str_t *host,
+    ngx_str_t *uri, ngx_str_t *method, ngx_array_t **headers)
 {
-    const ngx_array_t                 *signed_headers;
-
-    if (conf->enable == 0) {
-        return NGX_DECLINED;
-    }
-
-    if (method == NULL || method->len == 0 || method->data == NULL) {
-        return NGX_ERROR;
-    }
-
-    switch (ngx_http_test_predicates(r, conf->bypass)) {
-
-    case NGX_ERROR:
-        return NGX_ERROR;
-
-    case NGX_DECLINED:
-        return NGX_DECLINED;
-
-    default: /* NGX_OK */
-        break;
-    }
-
-    /*
-     * We do not wish to support anything with a body as signing for a body
-     * is unimplemented. Just skip the processing operation without returning
-     * an error.
-     */
-    if (!(r->method & (NGX_HTTP_GET|NGX_HTTP_HEAD|NGX_HTTP_OPTIONS))) {
-        return NGX_DECLINED;
-    }
+    ngx_array_t *signed_headers;
 
     signed_headers =
         ngx_http_proxy_auth_aws_sign(r, &conf->access_key,
             &conf->signing_key_decoded, &conf->key_scope, &conf->secret_key,
-            &conf->region, conf->host, conf->uri, method);
+            &conf->region, host, uri, method);
     if (signed_headers == NULL) {
         return NGX_ERROR;
     }
@@ -481,7 +463,7 @@ ngx_http_proxy_auth_aws_sign_headers(ngx_http_request_t *r,
 
 static ngx_int_t
 ngx_http_proxy_auth_aws_set_header(ngx_http_request_t *r, ngx_list_t *headers,
-    const ngx_str_t *key, ngx_uint_t hash, ngx_str_t *value)
+    ngx_str_t *key, ngx_uint_t hash, ngx_str_t *value)
 {
     ngx_uint_t        i;
     ngx_uint_t        matched;
@@ -558,47 +540,100 @@ ngx_http_proxy_auth_aws_set_header(ngx_http_request_t *r, ngx_list_t *headers,
 }
 
 
-static const ngx_str_t *
-ngx_http_proxy_auth_aws_upstream_method(ngx_http_request_t *r)
-{
-    ngx_http_upstream_t  *u;
-
-    u = r->upstream;
-
-    if (u != NULL && u->method.len != 0 && u->method.data != NULL) {
-        return &u->method;
-    }
-
-    return &r->method_name;
-}
-
-
 static ngx_int_t
 ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
     ngx_http_proxy_filter_ctx_t *filter_ctx)
 {
-    ngx_int_t                       rc;
+    ngx_http_proxy_auth_aws_conf_t *conf;
     ngx_uint_t                      i;
     ngx_keyval_t                   *header;
-    ngx_http_proxy_auth_aws_conf_t *conf;
-    const ngx_str_t                *method;
-    const ngx_array_t              *signed_headers;
+    ngx_str_t                       host, *method, *uri;
+    ngx_array_t                    *signed_headers;
+    ngx_list_part_t                *part;
+    ngx_table_elt_t                *h;
 
     if (filter_ctx->headers == NULL) {
         return NGX_DECLINED;
     }
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_proxy_auth_aws_module);
-    method = ngx_http_proxy_auth_aws_upstream_method(r);
 
-    rc = ngx_http_proxy_auth_aws_sign_headers(r, conf, method, &signed_headers);
+    if (!conf->enable) {
+        return NGX_DECLINED;
+    }
 
-    if (rc == NGX_ERROR) {
+    switch (ngx_http_test_predicates(r, conf->bypass)) {
+
+    case NGX_ERROR:
+        return NGX_ERROR;
+
+    case NGX_DECLINED:
+        return NGX_DECLINED;
+
+    default: /* NGX_OK */
+        break;
+    }
+
+    if (ngx_http_proxy_filter_get_method(r, filter_ctx, &method) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: failed to get method");
         return NGX_ERROR;
     }
 
-    if (rc == NGX_DECLINED) {
+    if ((method->len != 3 || ngx_strncmp(method->data, "GET", 3) != 0)
+        && (method->len != 4 || ngx_strncmp(method->data, "HEAD", 4) != 0)
+        && (method->len != 7 || ngx_strncmp(method->data, "OPTIONS", 7) != 0))
+    {
         return NGX_DECLINED;
+    }
+
+    host.len = 0;
+    host.data = NULL;
+    part = &filter_ctx->headers->part;
+    h = part->elts;
+
+    for (i = 0; /* void */; i++) {
+
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                break;
+            }
+
+            part = part->next;
+            h = part->elts;
+            i = 0;
+        }
+
+        if (h[i].hash == 0) {
+            continue;
+        }
+
+        if (ngx_http_proxy_auth_aws_header_name_eq(&h[i].key,
+                &ngx_http_proxy_auth_aws_host_header)
+            == NGX_OK)
+        {
+            host = h[i].value;
+            break;
+        }
+    }
+
+    if (host.len == 0) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: host header not found");
+        return NGX_ERROR;
+    }
+
+    if (ngx_http_proxy_filter_get_uri(r, filter_ctx, &uri) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: failed to get uri");
+        return NGX_ERROR;
+    }
+
+    if (ngx_http_proxy_auth_aws_sign_headers(r, conf, &host, uri, method,
+                                             &signed_headers)
+        != NGX_OK)
+    {
+        return NGX_ERROR;
     }
 
     for (i = 0; i < signed_headers->nelts; i++) {
@@ -664,7 +699,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
 
 #if (NGX_HTTP_CACHE)
 
-static const ngx_str_t *
+static ngx_str_t *
 ngx_http_proxy_auth_aws_request_method(ngx_http_request_t *r,
     ngx_http_proxy_auth_aws_conf_t *conf)
 {
@@ -683,13 +718,13 @@ ngx_http_proxy_auth_aws_request_method(ngx_http_request_t *r,
 static ngx_int_t
 ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
 {
-    ngx_http_proxy_auth_aws_ctx_t  *ctx;
-    ngx_int_t                       rc;
-    ngx_uint_t                      i;
-    ngx_keyval_t                   *header;
     ngx_http_proxy_auth_aws_conf_t *conf;
-    const ngx_str_t                *method;
-    const ngx_array_t              *signed_headers;
+    ngx_http_proxy_auth_aws_ctx_t  *ctx;
+
+    ngx_uint_t     i;
+    ngx_keyval_t  *header;
+    ngx_array_t   *signed_headers;
+    ngx_str_t     *method, host, uri;
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_proxy_auth_aws_module);
     if (ctx) {
@@ -697,20 +732,86 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
     }
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_proxy_auth_aws_module);
+
+    if (!conf->enable) {
+        return NGX_DECLINED;
+    }
+
+    switch (ngx_http_test_predicates(r, conf->bypass)) {
+
+    case NGX_ERROR:
+        return NGX_ERROR;
+
+    case NGX_DECLINED:
+        return NGX_DECLINED;
+
+    default: /* NGX_OK */
+        break;
+    }
+
 #if (NGX_HTTP_CACHE)
     method = ngx_http_proxy_auth_aws_request_method(r, conf);
 #else
     method = &r->method_name;
 #endif
 
-    rc = ngx_http_proxy_auth_aws_sign_headers(r, conf, method, &signed_headers);
+    if (method == NULL || method->len == 0 || method->data == NULL) {
+        return NGX_ERROR;
+    }
 
-    if (rc == NGX_DECLINED) {
+    /*
+     * We do not wish to support anything with a body as signing for a body
+     * is unimplemented. Just skip the processing operation without returning
+     * an error.
+     */
+    if ((method->len != 3 || ngx_strncmp(method->data, "GET", 3) != 0)
+        && (method->len != 4 || ngx_strncmp(method->data, "HEAD", 4) != 0)
+        && (method->len != 7 || ngx_strncmp(method->data, "OPTIONS", 7) != 0))
+    {
         return NGX_DECLINED;
     }
 
-    if (rc != NGX_OK) {
-        return rc;
+    if (conf->host == NULL) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: host is not set");
+        return NGX_ERROR;
+    }
+
+    if (ngx_http_complex_value(r, conf->host, &host) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: failed to compile host");
+        return NGX_ERROR;
+    }
+
+    if (host.len == 0) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: host is empty");
+        return NGX_ERROR;
+    }
+
+    if (conf->uri == NULL) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: uri is not set");
+        return NGX_ERROR;
+    }
+
+    if (ngx_http_complex_value(r, conf->uri, &uri) != NGX_OK) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: failed to compile uri");
+        return NGX_ERROR;
+    }
+
+    if (uri.len == 0 || uri.data[0] != '/') {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: uri is empty or does not start with /");
+        return NGX_ERROR;
+    }
+
+    if (ngx_http_proxy_auth_aws_sign_headers(r, conf, &host, &uri, method,
+                                             &signed_headers)
+        != NGX_OK)
+    {
+        return NGX_ERROR;
     }
 
     ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_proxy_auth_aws_ctx_t));

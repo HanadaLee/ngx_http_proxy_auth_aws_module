@@ -13,79 +13,71 @@ This project uses the same license as ngnix does i.e. the 2 clause BSD / simplif
 
 Implements proxying of authenticated requests to S3.
 
+### With NGX_HTTP_PROXY_FILTER
+
+When built with `ngx_http_proxy_filter_module`, the module registers a proxy
+request filter. It obtains the upstream method, Host header, and URI from the
+filter context, so `proxy_auth_aws_host`, `proxy_auth_aws_uri`, and the
+`$proxy_auth_aws_*` variables are not available.
+
 ```nginx
   server {
     listen     8000;
 
-    # With NGX_HTTP_PROXY_FILTER, the module uses the upstream request method directly.
-    # Without NGX_HTTP_PROXY_FILTER, proxy_auth_aws_convert_head is on by default.
-    # If you set `proxy_cache_convert_head` to off, or the `proxy_cache` function is not enabled, please also set `proxy_auth_aws_convert_head` to off. Otherwise, the HEAD request may be intercepted.
-    # Do not use `proxy_method` directive without NGX_HTTP_PROXY_FILTER, it will cause the authentication calculation result to be inconsistent with the actual upstream request.
-    # proxy_cache_convert_head off;
-    # proxy_auth_aws_convert_head off;
-
-    # Determine whether to append an authentication header based on the values ​​of multiple variables.
-    # proxy_auth_aws_bypass $http_no_s3_auth $arg_no_s3_auth $cookie_no_s3_auth $http_authorization;
-
     location / {
       proxy_auth_aws on;
-      proxy_auth_aws_access_key your_aws_access_key; # Example AKIDEXAMPLE
-      proxy_auth_aws_key_scope scope_of_generated_signing_key; #Example 20150830/us-east-1/service/aws4_request
-      proxy_auth_aws_signing_key signing_key_generated_using_script; #Example L4vRLWAO92X5L3Sqk5QydUSdB0nC9+1wfqLMOKLbRp4=
-      proxy_auth_aws_host your_s3_bucket.s3.amazonaws.com;
+      proxy_auth_aws_access_key your_aws_access_key;
+      proxy_auth_aws_key_scope scope_of_generated_signing_key;
+      proxy_auth_aws_signing_key signing_key_generated_using_script;
 
-      # Without NGX_HTTP_PROXY_FILTER, set the generated headers explicitly.
-      # With NGX_HTTP_PROXY_FILTER, these three headers are set directly.
-      proxy_set_header Authorization $proxy_auth_aws_authorization;
-      proxy_set_header X-Amz-Date $proxy_auth_aws_date;
-      proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;
       proxy_set_header Host your_s3_bucket.s3.amazonaws.com;
-    
       proxy_pass http://your_s3_bucket.s3.amazonaws.com;
     }
 
-    # This is an example that does not use the server root for the proxy root
-    location /myfiles {
+    # Determine whether to append an authentication header based on the values
+    # of multiple variables.
+    # proxy_auth_aws_bypass $http_no_s3_auth $arg_no_s3_auth
+    #     $cookie_no_s3_auth $http_authorization;
+  }
+```
 
-      rewrite /myfiles/(.*) /$1 break;
-      proxy_pass http://your_s3_bucket.s3.amazonaws.com/$1;
+### Without NGX_HTTP_PROXY_FILTER
 
+When built without the proxy filter, the module runs in
+`NGX_HTTP_PRECONTENT_PHASE` and exposes variables for `proxy_set_header`. You
+must set `proxy_auth_aws_host` and the `$proxy_auth_aws_*` variables explicitly.
+
+```nginx
+  server {
+    listen     8000;
+
+    # proxy_auth_aws_convert_head is on by default. If you set
+    # proxy_cache_convert_head to off, or proxy_cache is not enabled, please
+    # also set proxy_auth_aws_convert_head to off. Otherwise, HEAD requests
+    # may be intercepted.
+    # proxy_cache_convert_head off;
+    # proxy_auth_aws_convert_head off;
+
+    location / {
+      proxy_auth_aws on;
       proxy_auth_aws_access_key your_aws_access_key;
       proxy_auth_aws_key_scope scope_of_generated_signing_key;
       proxy_auth_aws_signing_key signing_key_generated_using_script;
       proxy_auth_aws_host your_s3_bucket.s3.amazonaws.com;
 
-      # This is an example that specific upstream headers
       proxy_set_header Authorization $proxy_auth_aws_authorization;
       proxy_set_header X-Amz-Date $proxy_auth_aws_date;
       proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;
       proxy_set_header Host your_s3_bucket.s3.amazonaws.com;
+
+      proxy_pass http://your_s3_bucket.s3.amazonaws.com;
     }
 
-    # This is an example that uses a specific S3 endpoint.
-    location /s3_beijing {
-
-      rewrite /s3_beijing/(.*) /$1 break;
-      proxy_pass http://your_s3_bucket.s3.cn-north-1.amazonaws.com.cn/$1;
-
-      proxy_auth_aws on;
-      proxy_auth_aws_access_key your_aws_access_key;
-      proxy_auth_aws_key_scope scope_of_generated_signing_key;
-      proxy_auth_aws_signing_key signing_key_generated_using_script;
-      proxy_auth_aws_host your_s3_bucket.s3.cn-north-1.amazonaws.com.cn;
-
-      # This is an example that specific upstream headers
-      proxy_set_header Authorization $proxy_auth_aws_authorization;
-      proxy_set_header X-Amz-Date $proxy_auth_aws_date;
-      proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;
-      proxy_set_header Host your_s3_bucket.s3.cn-north-1.amazonaws.com.cn;
-    }
-
-    # This is an example that specific upstream host and uri
+    # Example with a specific upstream host and URI
     location /s3_beijing_2 {
       set $upstream_host your_s3_bucket.s3.cn-north-1.amazonaws.com.cn;
       set $upstream_uri /test.txt;
-      proxy_pass http://$upstream_host$upstream_uri;
+
       proxy_auth_aws on;
       proxy_auth_aws_host $upstream_host;
       proxy_auth_aws_uri $upstream_uri;
@@ -93,24 +85,26 @@ Implements proxying of authenticated requests to S3.
       proxy_auth_aws_key_scope scope_of_generated_signing_key;
       proxy_auth_aws_signing_key signing_key_generated_using_script;
 
-      # This is an example that specific upstream headers
       proxy_set_header Authorization $proxy_auth_aws_authorization;
       proxy_set_header X-Amz-Date $proxy_auth_aws_date;
       proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;
-
       proxy_set_header Host $upstream_host;
+
+      proxy_pass http://$upstream_host$upstream_uri;
     }
 
-    # Security warning: Placing the secret key in the nginx configuration is unsafe. Please give priority to using the script mentioned below to generate and regularly update the signing key. Only use this solution as a last resort.
-    # This is an example that automatically calculate signing_key and key_scope
+    # Security warning: placing the secret key in the nginx configuration is
+    # unsafe. Please use the script below to generate and regularly update the
+    # signing key. Only use this solution as a last resort.
+    #
+    # Example that automatically calculates signing_key and key_scope
     location /s3_beijing_3 {
       proxy_auth_aws on;
-      proxy_auth_aws_access_key your_aws_access_key; # Example AKIDEXAMPLE
-      proxy_auth_aws_secret_key your_aws_secret_key; # Example LTAxxxxxxxx
+      proxy_auth_aws_access_key your_aws_access_key;
+      proxy_auth_aws_secret_key your_aws_secret_key;
       proxy_auth_aws_region cn-north-1;
       proxy_auth_aws_host your_s3_bucket.s3.cn-north-1.amazonaws.com.cn;
 
-      # This is an example that specific upstream headers
       proxy_set_header Authorization $proxy_auth_aws_authorization;
       proxy_set_header X-Amz-Date $proxy_auth_aws_date;
       proxy_set_header X-Amz-Content-Sha256 $proxy_auth_aws_content_sha256;

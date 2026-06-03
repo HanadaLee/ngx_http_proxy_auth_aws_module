@@ -71,9 +71,9 @@ const ngx_str_t  ngx_http_proxy_auth_aws_authz_header =
     ngx_string("authorization");
 
 
-const ngx_str_t *
+ngx_str_t *
 ngx_http_proxy_auth_aws_compute_request_time(ngx_http_request_t *r,
-    const time_t *timep)
+    time_t *timep)
 {
     ngx_str_t  *retval;
     ngx_tm_t    tm;
@@ -102,14 +102,14 @@ ngx_http_proxy_auth_aws_compute_request_time(ngx_http_request_t *r,
 
 
 int
-ngx_http_proxy_auth_aws_cmp_hnames(const void *one, const void *two)
+ngx_http_proxy_auth_aws_cmp_keys(const void *one, const void *two)
 {
-    ngx_keyval_t  *first, *second;
-    size_t         len;
-    int            ret;
+    const ngx_keyval_t    *first, *second;
+    size_t                 len;
+    int                    ret;
 
-    first = (ngx_keyval_t *) one;
-    second = (ngx_keyval_t *) two;
+    first = (const ngx_keyval_t *) one;
+    second = (const ngx_keyval_t *) two;
 
     len = ngx_min(first->key.len, second->key.len);
 
@@ -137,7 +137,7 @@ ngx_http_proxy_auth_aws_cmp_hnames(const void *one, const void *two)
 
 
 ngx_int_t
-ngx_http_proxy_auth_aws_is_already_encoded(const u_char *data, size_t len)
+ngx_http_proxy_auth_aws_is_already_encoded(u_char *data, size_t len)
 {
     size_t  i;
 
@@ -163,8 +163,8 @@ ngx_http_proxy_auth_aws_is_already_encoded(const u_char *data, size_t len)
 
 
 static ngx_int_t
-ngx_http_proxy_auth_aws_push_header(ngx_array_t *headers,
-    const ngx_str_t *key, const ngx_str_t *value)
+ngx_http_proxy_auth_aws_push_header(ngx_array_t *headers, ngx_str_t *key,
+    ngx_str_t *value)
 {
     ngx_keyval_t  *header;
 
@@ -180,9 +180,9 @@ ngx_http_proxy_auth_aws_push_header(ngx_array_t *headers,
 }
 
 
-const ngx_str_t *
+ngx_str_t *
 ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
-    const ngx_str_t *args)
+    ngx_str_t *args)
 {
     u_char                            *p, *ampersand, *equal, *last, *dst;
     size_t                             i, len, total_len;
@@ -239,7 +239,8 @@ ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
         len = equal - p;
         if (len > 0) {
             if (len >= 3
-                && ngx_http_proxy_auth_aws_is_already_encoded(p, len) == NGX_OK)
+                && ngx_http_proxy_auth_aws_is_already_encoded(p, len)
+                   == NGX_OK)
             {
                 qs_arg->key.data = ngx_pnalloc(r->pool, len);
                 if (qs_arg->key.data == NULL) {
@@ -272,7 +273,8 @@ ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
         if (len > 0) {
 
             if (len >= 3
-                && ngx_http_proxy_auth_aws_is_already_encoded(equal + 1, len - 1)
+                && ngx_http_proxy_auth_aws_is_already_encoded(equal + 1,
+                                                              len - 1)
                    == NGX_OK)
             {
                 qs_arg->value.data = ngx_pnalloc(r->pool, len - 1);
@@ -308,8 +310,7 @@ ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
 
     if (query_string_args->nelts > 0) {
         ngx_qsort(query_string_args->elts, (size_t) query_string_args->nelts,
-                  sizeof(ngx_keyval_t),
-                  ngx_http_proxy_auth_aws_cmp_hnames);
+                  sizeof(ngx_keyval_t), ngx_http_proxy_auth_aws_cmp_keys);
     }
 
     total_len = 0;
@@ -357,7 +358,7 @@ ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
     retval->data[retval->len] = '\0';
 
     ngx_http_proxy_auth_aws_log_info(r, "canonical qs constructed is %V",
-        retval);
+                                     retval);
 
     return retval;
 }
@@ -365,15 +366,15 @@ ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
 
 ngx_http_proxy_auth_aws_canon_header_t
 ngx_http_proxy_auth_aws_canonize_headers(ngx_http_request_t *r,
-    const ngx_str_t *host, const ngx_str_t *amz_date,
-    const ngx_str_t *content_hash)
+    ngx_str_t *host, ngx_str_t *amz_date, ngx_str_t *content_hash)
 {
     size_t                             header_names_size, header_nameval_size;
     size_t                             i;
     u_char                            *p;
-    ngx_http_proxy_auth_aws_canon_header_t  retval;
     ngx_array_t                       *settable_header_array;
     ngx_keyval_t                      *headers;
+
+    ngx_http_proxy_auth_aws_canon_header_t  retval;
 
     ngx_memzero(&retval, sizeof(ngx_http_proxy_auth_aws_canon_header_t));
 
@@ -406,8 +407,7 @@ ngx_http_proxy_auth_aws_canonize_headers(ngx_http_request_t *r,
 
     ngx_qsort(settable_header_array->elts,
               (size_t) settable_header_array->nelts,
-              sizeof(ngx_keyval_t),
-              ngx_http_proxy_auth_aws_cmp_hnames);
+              sizeof(ngx_keyval_t), ngx_http_proxy_auth_aws_cmp_keys);
 
     retval.header_list = settable_header_array;
     headers = settable_header_array->elts;
@@ -484,8 +484,8 @@ ngx_http_proxy_auth_aws_canonize_headers(ngx_http_request_t *r,
 }
 
 
-const ngx_str_t *
-ngx_http_proxy_auth_aws_request_body_hash(ngx_http_request_t *r)
+ngx_str_t *
+ngx_http_proxy_auth_aws_body_hash(ngx_http_request_t *r)
 {
     /* TODO: support cases involving non-empty body */
     (void) r;
@@ -573,8 +573,8 @@ ngx_http_proxy_auth_aws_escape_uri(ngx_http_request_t *r, ngx_str_t *src)
 }
 
 
-const ngx_str_t *
-ngx_http_proxy_auth_aws_canon_uri(ngx_http_request_t *r, const ngx_str_t *path)
+ngx_str_t *
+ngx_http_proxy_auth_aws_canon_uri(ngx_http_request_t *r, ngx_str_t *path)
 {
     ngx_str_t      *retval;
     u_char         *src, *dst;
@@ -649,17 +649,13 @@ ngx_http_proxy_auth_aws_canon_uri(ngx_http_request_t *r, const ngx_str_t *path)
 
 ngx_http_proxy_auth_aws_canon_req_t
 ngx_http_proxy_auth_aws_make_canonical_request(ngx_http_request_t *r,
-    const ngx_str_t *host, const ngx_str_t *uri,
-    const ngx_str_t *amz_date, const ngx_str_t *method)
+    ngx_str_t *host, ngx_str_t *uri, ngx_str_t *amz_date, ngx_str_t *method)
 {
-    ngx_http_proxy_auth_aws_canon_req_t  retval;
-    size_t                               total_len;
-    u_char                              *p;
-    ngx_str_t                            path, args;
-    u_char                              *question_mark;
-    const ngx_str_t                     *canon_qs;
-    const ngx_str_t                     *canon_uri;
-    const ngx_str_t                     *request_body_hash;
+    size_t       total_len;
+    ngx_str_t    path, args, *canon_qs, *canon_uri, *body_hash;
+    u_char      *p, *question_mark;
+
+    ngx_http_proxy_auth_aws_canon_req_t     retval;
     ngx_http_proxy_auth_aws_canon_header_t  canon_headers;
 
     ngx_memzero(&retval, sizeof(ngx_http_proxy_auth_aws_canon_req_t));
@@ -705,13 +701,13 @@ ngx_http_proxy_auth_aws_make_canonical_request(ngx_http_request_t *r,
     }
 
     /* compute request body hash */
-    request_body_hash = ngx_http_proxy_auth_aws_request_body_hash(r);
-    if (request_body_hash == NULL) {
+    body_hash = ngx_http_proxy_auth_aws_body_hash(r);
+    if (body_hash == NULL) {
         return retval;
     }
 
     canon_headers = ngx_http_proxy_auth_aws_canonize_headers(r, host, amz_date,
-        request_body_hash);
+                                                             body_hash);
     if (canon_headers.canon_header_str == NULL
         || canon_headers.signed_header_names == NULL
         || canon_headers.header_list == NULL)
@@ -730,7 +726,7 @@ ngx_http_proxy_auth_aws_make_canonical_request(ngx_http_request_t *r,
     total_len = method->len + canon_uri->len + canon_qs->len
                 + canon_headers.canon_header_str->len
                 + canon_headers.signed_header_names->len
-                + request_body_hash->len + 5;
+                + body_hash->len + 5;
 
     retval.canon_request = ngx_palloc(r->pool, sizeof(ngx_str_t));
     if (retval.canon_request == NULL) {
@@ -748,7 +744,7 @@ ngx_http_proxy_auth_aws_make_canonical_request(ngx_http_request_t *r,
     p = ngx_snprintf(p, total_len + 1, "%V\n%V\n%V\n%V\n%V\n%V",
                      method, canon_uri, canon_qs,
                      canon_headers.canon_header_str,
-                     canon_headers.signed_header_names, request_body_hash);
+                     canon_headers.signed_header_names, body_hash);
 
     retval.canon_request->len = p - retval.canon_request->data;
     retval.canon_request->data[retval.canon_request->len] = '\0';
@@ -762,10 +758,9 @@ ngx_http_proxy_auth_aws_make_canonical_request(ngx_http_request_t *r,
 }
 
 
-const ngx_str_t *
+ngx_str_t *
 ngx_http_proxy_auth_aws_string_to_sign(ngx_http_request_t *r,
-    const ngx_str_t *key_scope, const ngx_str_t *date,
-    const ngx_str_t *canon_request_hash)
+    ngx_str_t *key_scope, ngx_str_t *date, ngx_str_t *canon_request_hash)
 {
     ngx_str_t  *retval;
     size_t      len;
@@ -797,10 +792,10 @@ ngx_http_proxy_auth_aws_string_to_sign(ngx_http_request_t *r,
 }
 
 
-const ngx_str_t *
+ngx_str_t *
 ngx_http_proxy_auth_aws_make_auth_token(ngx_http_request_t *r,
-    const ngx_str_t *signature, const ngx_str_t *signed_header_names,
-    const ngx_str_t *access_key, const ngx_str_t *key_scope)
+    ngx_str_t *signature, ngx_str_t *signed_header_names,
+    ngx_str_t *access_key, ngx_str_t *key_scope)
 {
     ngx_str_t  *authz;
     size_t      len;
@@ -839,16 +834,15 @@ ngx_http_proxy_auth_aws_make_auth_token(ngx_http_request_t *r,
 
 ngx_http_proxy_auth_aws_signed_req_t
 ngx_http_proxy_auth_aws_compute_signature(ngx_http_request_t *r,
-    const ngx_str_t *signing_key, const ngx_str_t *key_scope,
-    const ngx_str_t *host, const ngx_str_t *uri,
-    const ngx_str_t *method)
+    ngx_str_t *signing_key, ngx_str_t *key_scope, ngx_str_t *host,
+    ngx_str_t *uri, ngx_str_t *method)
 {
     ngx_http_proxy_auth_aws_signed_req_t  retval;
-    const ngx_str_t                      *date;
+    ngx_str_t *date;
     ngx_http_proxy_auth_aws_canon_req_t   canon_request;
-    const ngx_str_t                      *canon_request_hash;
-    const ngx_str_t                      *string_to_sign;
-    const ngx_str_t                      *signature;
+    ngx_str_t *canon_request_hash;
+    ngx_str_t *string_to_sign;
+    ngx_str_t *signature;
 
     ngx_memzero(&retval, sizeof(ngx_http_proxy_auth_aws_signed_req_t));
 
@@ -896,8 +890,8 @@ ngx_http_proxy_auth_aws_compute_signature(ngx_http_request_t *r,
 
 ngx_int_t
 ngx_http_proxy_auth_aws_generate_signing_key(ngx_http_request_t *r,
-    const ngx_str_t *secret_key, const ngx_str_t *region,
-    ngx_str_t *signature_key, ngx_str_t *key_scope)
+    ngx_str_t *secret_key, ngx_str_t *region, ngx_str_t *signature_key,
+    ngx_str_t *key_scope)
 {
     u_char      date_stamp[9];
     ngx_tm_t    tm;
@@ -1064,24 +1058,23 @@ ngx_http_proxy_auth_aws_generate_signing_key(ngx_http_request_t *r,
 }
 
 
-const ngx_array_t *
-ngx_http_proxy_auth_aws_sign(ngx_http_request_t *r,
-    const ngx_str_t *access_key, const ngx_str_t *signing_key,
-    const ngx_str_t *key_scope, const ngx_str_t *secret_key,
-    const ngx_str_t *region, ngx_http_complex_value_t *host,
-    ngx_http_complex_value_t *uri, const ngx_str_t *method)
+ngx_array_t *
+ngx_http_proxy_auth_aws_sign(ngx_http_request_t *r, ngx_str_t *access_key,
+    ngx_str_t *signing_key, ngx_str_t *key_scope, ngx_str_t *secret_key,
+    ngx_str_t *region, ngx_str_t *host, ngx_str_t *uri, ngx_str_t *method)
 {
-    ngx_str_t                          local_signing_key;
-    ngx_str_t                          local_key_scope;
-    const ngx_str_t                   *used_signing_key = signing_key;
-    const ngx_str_t                   *used_key_scope = key_scope;
-    const ngx_str_t                   *used_uri;
-    ngx_str_t                          compiled_host, compiled_uri;
-    ngx_http_proxy_auth_aws_signed_req_t  signature_details;
-    const ngx_str_t                   *auth_header_value;
-    ngx_keyval_t                      *header_ptr;
+    ngx_str_t       local_signing_key, local_key_scope, *auth_header_value,
+                   *used_signing_key, *used_key_scope;
+    ngx_keyval_t   *header;
 
-    if (access_key == NULL || access_key->len == 0 || access_key->data == NULL) {
+    ngx_http_proxy_auth_aws_signed_req_t  signature_details;
+
+    used_signing_key = signing_key;
+    used_key_scope = key_scope;
+
+    if (access_key == NULL || access_key->len == 0
+        || access_key->data == NULL)
+    {
         ngx_http_proxy_auth_aws_log_error(r, "access_key is not set");
         return NULL;
     }
@@ -1111,49 +1104,25 @@ ngx_http_proxy_auth_aws_sign(ngx_http_request_t *r,
 
     ngx_http_proxy_auth_aws_log_debug0(r, "generating aws host");
 
-    if (host == NULL) {
+    if (host == NULL || host->len == 0 || host->data == NULL) {
         ngx_http_proxy_auth_aws_log_error(r, "host is not set");
-        return NULL;
-    }
-
-    if (ngx_http_complex_value(r, host, &compiled_host) != NGX_OK) {
-        ngx_http_proxy_auth_aws_log_error(r,
-            "failed to compile host complex value");
-        return NULL;
-    }
-
-    if (compiled_host.len == 0 || compiled_host.data == NULL) {
-        ngx_http_proxy_auth_aws_log_error(r, "host is empty");
         return NULL;
     }
 
     ngx_http_proxy_auth_aws_log_debug0(r, "generating uri");
 
-    ngx_str_null(&compiled_uri);
-    used_uri = NULL;
-
-    if (uri != NULL) {
-        if (ngx_http_complex_value(r, uri, &compiled_uri) != NGX_OK) {
-            ngx_http_proxy_auth_aws_log_error(r,
-                "failed to compile uri complex value");
-            return NULL;
-        }
-
-        if (compiled_uri.len == 0 || compiled_uri.data[0] != '/') {
-            ngx_http_proxy_auth_aws_log_info(r,
-                "compiled uri does not start with a slash");
-            compiled_uri.len = 1;
-            compiled_uri.data = (u_char *) "/";
-        }
-
-        used_uri = &compiled_uri;
+    if (uri != NULL && uri->len > 0 && uri->data != NULL
+        && uri->data[0] != '/')
+    {
+        ngx_http_proxy_auth_aws_log_error(r, "uri does not start with a slash");
+        return NULL;
     }
 
     ngx_http_proxy_auth_aws_log_debug0(r, "computing aws signature");
 
     signature_details = ngx_http_proxy_auth_aws_compute_signature(r,
         used_signing_key, used_key_scope,
-        &compiled_host, used_uri, method);
+        host, uri, method);
     if (signature_details.signature == NULL
         || signature_details.signed_header_names == NULL
         || signature_details.header_list == NULL)
@@ -1168,13 +1137,13 @@ ngx_http_proxy_auth_aws_sign(ngx_http_request_t *r,
         return NULL;
     }
 
-    header_ptr = ngx_array_push(signature_details.header_list);
-    if (header_ptr == NULL) {
+    header = ngx_array_push(signature_details.header_list);
+    if (header == NULL) {
         return NULL;
     }
 
-    header_ptr->key = ngx_http_proxy_auth_aws_authz_header;
-    header_ptr->value = *auth_header_value;
+    header->key = ngx_http_proxy_auth_aws_authz_header;
+    header->value = *auth_header_value;
 
     return signature_details.header_list;
 }
