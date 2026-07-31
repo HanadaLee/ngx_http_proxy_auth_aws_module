@@ -33,7 +33,6 @@ typedef struct {
     ngx_array_t               *convert_head;
 #endif
 
-    ngx_array_t               *bypass;
     ngx_array_t               *access_key;
     ngx_array_t               *key_scope;
     ngx_array_t               *signing_key;
@@ -50,8 +49,6 @@ typedef struct {
     ngx_flag_t                 convert_head;
 #endif
 
-    ngx_array_t               *bypass;
-
     ngx_str_t                  access_key;
     ngx_str_t                  key_scope;
     ngx_str_t                  signing_key;
@@ -64,6 +61,8 @@ typedef struct {
     ngx_http_complex_value_t  *uri;
 #endif
 #endif
+
+    ngx_array_t               *bypass;
 } ngx_http_proxy_auth_aws_conf_t;
 
 
@@ -121,17 +120,8 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
       NULL },
 
     { ngx_string("proxy_auth_aws_bypass"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
-                        |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
-                        |NGX_HTTP_LOC_WHEN_CONF
-#endif
-                        |NGX_CONF_1MORE,
-#if (NGX_CONDITION)
-      ngx_http_set_conditional_predicate_slot,
-#else
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
       ngx_http_set_predicate_slot,
-#endif
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_proxy_auth_aws_conf_t, bypass),
       NULL },
@@ -520,9 +510,10 @@ ngx_http_proxy_auth_aws_create_loc_conf(ngx_conf_t *cf)
         return NULL;
     }
 
+    conf->bypass = NGX_CONF_UNSET_PTR;
+
 #if !(NGX_CONDITION)
     conf->enable = NGX_CONF_UNSET;
-    conf->bypass = NGX_CONF_UNSET_PTR;
 #if !(NGX_HTTP_PROXY_FILTER) && (NGX_HTTP_CACHE)
     conf->convert_head = NGX_CONF_UNSET;
 #endif
@@ -564,12 +555,7 @@ ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf, void *parent,
     }
 #endif
 
-    if (ngx_conf_merge_conditional_ptr_value(cf, &conf->bypass,
-                                             prev->bypass, NULL)
-        != NGX_OK)
-    {
-        return NGX_CONF_ERROR;
-    }
+    ngx_conf_merge_ptr_value(conf->bypass, prev->bypass, NULL);
 
     if (ngx_conf_merge_conditional_str_value(cf, &conf->access_key,
                                              prev->access_key, empty)
@@ -818,10 +804,6 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
     ngx_array_t                    *signed_headers;
     ngx_list_part_t                *part;
     ngx_table_elt_t                *h;
-#if (NGX_CONDITION)
-    ngx_array_t                    *bypass;
-#endif
-
     if (ctx->headers == NULL) {
         return NGX_DECLINED;
     }
@@ -836,13 +818,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
         return NGX_DECLINED;
     }
 
-#if (NGX_CONDITION)
-    bypass = ngx_http_get_conditional_ptr_value(r, conf->bypass);
-
-    switch (ngx_http_test_predicates(r, bypass)) {
-#else
     switch (ngx_http_test_predicates(r, conf->bypass)) {
-#endif
 
     case NGX_ERROR:
         return NGX_ERROR;
@@ -1012,7 +988,6 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
     ngx_array_t   *signed_headers;
     ngx_str_t     *method, host, uri;
 #if (NGX_CONDITION)
-    ngx_array_t                 *bypass;
     ngx_http_complex_value_t   *host_cv, *uri_cv;
 #endif
 
@@ -1031,13 +1006,7 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
         return NGX_DECLINED;
     }
 
-#if (NGX_CONDITION)
-    bypass = ngx_http_get_conditional_ptr_value(r, conf->bypass);
-
-    switch (ngx_http_test_predicates(r, bypass)) {
-#else
     switch (ngx_http_test_predicates(r, conf->bypass)) {
-#endif
 
     case NGX_ERROR:
         return NGX_ERROR;
