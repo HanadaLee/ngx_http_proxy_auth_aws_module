@@ -115,6 +115,115 @@ must set `proxy_auth_aws_host` and the `$proxy_auth_aws_*` variables explicitly.
   }
 ```
 
+## Directives
+
+### `proxy_auth_aws`
+
+**Syntax:** `proxy_auth_aws on | off;`
+
+**Default:** `proxy_auth_aws off;`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Enables or disables AWS request signing.
+
+### `proxy_auth_aws_bypass`
+
+**Syntax:** `proxy_auth_aws_bypass predicate ...;`
+
+**Default:** `-`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Skips signing when at least one predicate evaluates to a non-empty value other
+than `0`.
+
+### `proxy_auth_aws_access_key`
+
+**Syntax:** `proxy_auth_aws_access_key access_key;`
+
+**Default:** `-`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Sets the AWS access key ID.
+
+### `proxy_auth_aws_key_scope`
+
+**Syntax:** `proxy_auth_aws_key_scope scope;`
+
+**Default:** `-`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Sets the scope associated with a pre-generated signing key.
+
+### `proxy_auth_aws_signing_key`
+
+**Syntax:** `proxy_auth_aws_signing_key base64_key;`
+
+**Default:** `-`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Sets a Base64-encoded, pre-generated AWS signing key. The key is decoded while
+the nginx configuration is loaded.
+
+### `proxy_auth_aws_secret_key`
+
+**Syntax:** `proxy_auth_aws_secret_key secret_key;`
+
+**Default:** `-`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Sets the AWS secret key used to derive signing data when a pre-generated key is
+not configured.
+
+### `proxy_auth_aws_region`
+
+**Syntax:** `proxy_auth_aws_region region;`
+
+**Default:** `proxy_auth_aws_region us-east-1;`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Sets the AWS region used for request signing.
+
+### `proxy_auth_aws_host`
+
+**Syntax:** `proxy_auth_aws_host value;`
+
+**Default:** `-`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Sets the upstream host to sign when the module is built without
+`NGX_HTTP_PROXY_FILTER`. The value can contain variables.
+
+### `proxy_auth_aws_uri`
+
+**Syntax:** `proxy_auth_aws_uri value;`
+
+**Default:** `-`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Sets the upstream URI to sign when the module is built without
+`NGX_HTTP_PROXY_FILTER`. The value can contain variables.
+
+### `proxy_auth_aws_convert_head`
+
+**Syntax:** `proxy_auth_aws_convert_head on | off;`
+
+**Default:** `proxy_auth_aws_convert_head on;`
+
+**Context:** `http`, `server`, `location`, `when`
+
+Uses `GET` while signing a `HEAD` request. This directive is available when the
+module is built without `NGX_HTTP_PROXY_FILTER` and HTTP cache support is
+enabled.
+
 ## Security considerations
 The V4 protocol does not need access to the actual secret keys that one obtains
 from the IAM service. The correct way to use the IAM key is to actually generate
