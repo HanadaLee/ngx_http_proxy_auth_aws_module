@@ -20,41 +20,44 @@
 #include "ngx_http_proxy_auth_aws_functions.h"
 
 
-#define ngx_http_proxy_auth_aws_log_error(r, ...)                              \
-    do {                                                                       \
-        if ((r) != NULL && (r)->connection != NULL) {                          \
-            ngx_log_error(NGX_LOG_ERR, (r)->connection->log, 0, __VA_ARGS__);  \
-        }                                                                      \
+#define ngx_http_proxy_auth_aws_log_error(r, ...)                            \
+    do {                                                                     \
+        if ((r) != NULL && (r)->connection != NULL) {                        \
+            ngx_log_error(NGX_LOG_ERR, (r)->connection->log, 0,              \
+                          __VA_ARGS__);                                      \
+        }                                                                    \
     } while (0)
 
-#define ngx_http_proxy_auth_aws_log_info(r, ...)                               \
-    do {                                                                       \
-        if ((r) != NULL && (r)->connection != NULL) {                          \
-            ngx_log_error(NGX_LOG_INFO, (r)->connection->log, 0, __VA_ARGS__); \
-        }                                                                      \
+#define ngx_http_proxy_auth_aws_log_info(r, ...)                             \
+    do {                                                                     \
+        if ((r) != NULL && (r)->connection != NULL) {                        \
+            ngx_log_error(NGX_LOG_INFO, (r)->connection->log, 0,             \
+                          __VA_ARGS__);                                      \
+        }                                                                    \
     } while (0)
 
-#define ngx_http_proxy_auth_aws_log_debug0(r, fmt)                             \
-    do {                                                                       \
-        if ((r) != NULL && (r)->connection != NULL) {                          \
-            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, (r)->connection->log, 0, fmt);  \
-        }                                                                      \
+#define ngx_http_proxy_auth_aws_log_debug0(r, fmt)                           \
+    do {                                                                     \
+        if ((r) != NULL && (r)->connection != NULL) {                        \
+            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, (r)->connection->log, 0,      \
+                           fmt);                                             \
+        }                                                                    \
     } while (0)
 
-#define ngx_http_proxy_auth_aws_log_debug1(r, fmt, a1)                         \
-    do {                                                                       \
-        if ((r) != NULL && (r)->connection != NULL) {                          \
-            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, (r)->connection->log, 0, fmt,   \
-                           a1);                                                \
-        }                                                                      \
+#define ngx_http_proxy_auth_aws_log_debug1(r, fmt, a1)                       \
+    do {                                                                     \
+        if ((r) != NULL && (r)->connection != NULL) {                        \
+            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, (r)->connection->log, 0, fmt, \
+                           a1);                                              \
+        }                                                                    \
     } while (0)
 
-#define ngx_http_proxy_auth_aws_log_debug2(r, fmt, a1, a2)                     \
-    do {                                                                       \
-        if ((r) != NULL && (r)->connection != NULL) {                          \
-            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, (r)->connection->log, 0, fmt,   \
-                           a1, a2);                                            \
-        }                                                                      \
+#define ngx_http_proxy_auth_aws_log_debug2(r, fmt, a1, a2)                   \
+    do {                                                                     \
+        if ((r) != NULL && (r)->connection != NULL) {                        \
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, (r)->connection->log, 0, fmt, \
+                           a1, a2);                                          \
+        }                                                                    \
     } while (0)
 
 
@@ -249,6 +252,7 @@ ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
                                        "qs_arg->key.data");
                     return NULL;
                 }
+
                 ngx_memcpy(qs_arg->key.data, p, len);
                 qs_arg->key.len = len;
 
@@ -260,6 +264,7 @@ ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
                                        "qs_arg->key.data");
                     return NULL;
                 }
+
                 qs_arg->key.len = (u_char *) ngx_escape_uri(
                     qs_arg->key.data, p, len, NGX_ESCAPE_ARGS)
                     - qs_arg->key.data;
@@ -284,6 +289,7 @@ ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
                                        "qs_arg->value.data");
                     return NULL;
                 }
+
                 ngx_memcpy(qs_arg->value.data, equal + 1, len - 1);
                 qs_arg->value.len = len - 1;
 
@@ -295,6 +301,7 @@ ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
                                        "qs_arg->value.data");
                     return NULL;
                 }
+
                 qs_arg->value.len = (u_char *) ngx_escape_uri(
                     qs_arg->value.data, equal + 1, len - 1,
                     NGX_ESCAPE_ARGS)
@@ -499,7 +506,7 @@ ngx_http_proxy_auth_aws_body_hash(ngx_http_request_t *r)
  * ngx_escape_uri that does exactly that.  It modifies the source in place if
  * it needs to be escaped.
  * See
- *   http://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.
+ * See the AWS Signature Version 4 canonical request documentation.
  *   html
  */
 
@@ -838,11 +845,11 @@ ngx_http_proxy_auth_aws_compute_signature(ngx_http_request_t *r,
     ngx_str_t *uri, ngx_str_t *method)
 {
     ngx_http_proxy_auth_aws_signed_req_t  retval;
-    ngx_str_t *date;
+    ngx_str_t                            *date;
     ngx_http_proxy_auth_aws_canon_req_t   canon_request;
-    ngx_str_t *canon_request_hash;
-    ngx_str_t *string_to_sign;
-    ngx_str_t *signature;
+    ngx_str_t                            *canon_request_hash;
+    ngx_str_t                            *string_to_sign;
+    ngx_str_t                            *signature;
 
     ngx_memzero(&retval, sizeof(ngx_http_proxy_auth_aws_signed_req_t));
 
@@ -911,7 +918,10 @@ ngx_http_proxy_auth_aws_generate_signing_key(ngx_http_request_t *r,
     ngx_str_t  *k_service;
     ngx_str_t  *k_signing;
 
-    if (secret_key == NULL || secret_key->len == 0 || secret_key->data == NULL) {
+    if (secret_key == NULL
+        || secret_key->len == 0
+        || secret_key->data == NULL)
+    {
         ngx_http_proxy_auth_aws_log_error(r,
             "generate_signing_key: secret_key is not set");
         return NGX_ERROR;
@@ -945,7 +955,7 @@ ngx_http_proxy_auth_aws_generate_signing_key(ngx_http_request_t *r,
     key_scope->data = ngx_pnalloc(r->pool, key_scope_len + 1);
     if (key_scope->data == NULL) {
         ngx_http_proxy_auth_aws_log_error(r, "generate_signing_key: failed to "
-                           "allocate memory for key_scope");
+                                          "allocate memory for key_scope");
         return NGX_ERROR;
     }
 
@@ -961,7 +971,7 @@ ngx_http_proxy_auth_aws_generate_signing_key(ngx_http_request_t *r,
     k_secret = ngx_pnalloc(r->pool, k_secret_len);
     if (k_secret == NULL) {
         ngx_http_proxy_auth_aws_log_error(r, "generate_signing_key: failed to "
-                           "allocate memory for k_secret");
+                                          "allocate memory for k_secret");
         return NGX_ERROR;
     }
 
@@ -1043,7 +1053,7 @@ ngx_http_proxy_auth_aws_generate_signing_key(ngx_http_request_t *r,
     signature_key->data = ngx_pnalloc(r->pool, k_signing->len);
     if (signature_key->data == NULL) {
         ngx_http_proxy_auth_aws_log_error(r, "generate_signing_key: failed to "
-                           "allocate memory for signature_key");
+                                          "allocate memory for signature_key");
         return NGX_ERROR;
     }
 

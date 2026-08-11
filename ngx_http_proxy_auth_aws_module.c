@@ -272,11 +272,11 @@ static ngx_http_module_t  ngx_http_proxy_auth_aws_module_ctx = {
 #endif
     ngx_http_proxy_auth_aws_init,               /* postconfiguration */
 
-    NULL,                                       /* create main configuration */
-    NULL,                                       /* init main configuration */
+    NULL,                                       /* create main conf */
+    NULL,                                       /* init main conf */
 
-    NULL,                                       /* create server configuration */
-    NULL,                                       /* merge server configuration */
+    NULL,                                       /* create server conf */
+    NULL,                                       /* merge server conf */
 
     ngx_http_proxy_auth_aws_create_loc_conf,    /* create loc conf */
     ngx_http_proxy_auth_aws_merge_loc_conf      /* merge loc conf */
@@ -485,9 +485,10 @@ ngx_http_proxy_auth_aws_set_signing_key(ngx_conf_t *cf, ngx_command_t *cmd,
 
     values = (ngx_array_t **) ((u_char *) conf + cmd->offset);
     ctx = ngx_condition_find_expr_ctx(*values,
-              ngx_condition_get_associated_expr_id(cf),
-              sizeof(ngx_conf_condition_str_ctx_t),
-              offsetof(ngx_conf_condition_str_ctx_t, expr_id));
+                                      ngx_condition_get_associated_expr_id(cf),
+                                      sizeof(ngx_conf_condition_str_ctx_t),
+                                      offsetof(ngx_conf_condition_str_ctx_t,
+                                               expr_id));
     if (ctx == NULL) {
         return NGX_CONF_ERROR;
     }
@@ -638,8 +639,8 @@ ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf, void *parent,
             }
         }
 
-        if (ngx_decode_base64(&conf->signing_key_decoded, &conf->signing_key)
-                != NGX_OK)
+        if (ngx_decode_base64(&conf->signing_key_decoded,
+                              &conf->signing_key) != NGX_OK)
         {
             ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
                                "proxy_auth_aws_signing_key is not a valid "
@@ -961,13 +962,15 @@ ngx_http_proxy_auth_aws_request_method(ngx_http_request_t *r,
 {
     static ngx_str_t  get_method = ngx_string("GET");
 
+    ngx_flag_t  convert_head;
+
 #if (NGX_CONDITION)
-    if (r->method == NGX_HTTP_HEAD
-        && ngx_http_get_conditional_flag_value(r, conf->convert_head))
+    convert_head = ngx_http_get_conditional_flag_value(r, conf->convert_head);
 #else
-    if (r->method == NGX_HTTP_HEAD && conf->convert_head)
+    convert_head = conf->convert_head;
 #endif
-    {
+
+    if (r->method == NGX_HTTP_HEAD && convert_head) {
         return &get_method;
     }
 
@@ -980,16 +983,14 @@ ngx_http_proxy_auth_aws_request_method(ngx_http_request_t *r,
 static ngx_int_t
 ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
 {
-    ngx_http_proxy_auth_aws_conf_t *conf;
-    ngx_http_proxy_auth_aws_ctx_t  *ctx;
+    ngx_http_proxy_auth_aws_conf_t  *conf;
+    ngx_http_proxy_auth_aws_ctx_t   *ctx;
 
-    ngx_uint_t     i;
-    ngx_keyval_t  *header;
-    ngx_array_t   *signed_headers;
-    ngx_str_t     *method, host, uri;
-#if (NGX_CONDITION)
+    ngx_uint_t                  i;
+    ngx_keyval_t               *header;
+    ngx_array_t                *signed_headers;
+    ngx_str_t                  *method, host, uri;
     ngx_http_complex_value_t   *host_cv, *uri_cv;
-#endif
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_proxy_auth_aws_module);
     if (ctx) {
@@ -1042,21 +1043,17 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
 
 #if (NGX_CONDITION)
     host_cv = ngx_http_get_conditional_ptr_value(r, conf->host);
+#else
+    host_cv = conf->host;
+#endif
 
     if (host_cv == NULL) {
-#else
-    if (conf->host == NULL) {
-#endif
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                       "proxy_auth_aws: host is not set");
         return NGX_ERROR;
     }
 
-#if (NGX_CONDITION)
     if (ngx_http_complex_value(r, host_cv, &host) != NGX_OK) {
-#else
-    if (ngx_http_complex_value(r, conf->host, &host) != NGX_OK) {
-#endif
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                       "proxy_auth_aws: failed to compile host");
         return NGX_ERROR;
@@ -1070,21 +1067,17 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
 
 #if (NGX_CONDITION)
     uri_cv = ngx_http_get_conditional_ptr_value(r, conf->uri);
+#else
+    uri_cv = conf->uri;
+#endif
 
     if (uri_cv == NULL) {
-#else
-    if (conf->uri == NULL) {
-#endif
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                       "proxy_auth_aws: uri is not set");
         return NGX_ERROR;
     }
 
-#if (NGX_CONDITION)
     if (ngx_http_complex_value(r, uri_cv, &uri) != NGX_OK) {
-#else
-    if (ngx_http_complex_value(r, conf->uri, &uri) != NGX_OK) {
-#endif
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                       "proxy_auth_aws: failed to compile uri");
         return NGX_ERROR;
