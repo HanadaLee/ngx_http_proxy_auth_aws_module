@@ -801,10 +801,8 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
     ngx_http_proxy_auth_aws_conf_t *conf;
     ngx_uint_t                      i;
     ngx_keyval_t                   *header;
-    ngx_str_t                       host, *method, *uri;
+    ngx_str_t                      *host, *method, *uri;
     ngx_array_t                    *signed_headers;
-    ngx_list_part_t                *part;
-    ngx_table_elt_t                *h;
     if (ctx->headers == NULL) {
         return NGX_DECLINED;
     }
@@ -844,39 +842,15 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
         return NGX_DECLINED;
     }
 
-    host.len = 0;
-    host.data = NULL;
-    part = &ctx->headers->part;
-    h = part->elts;
-
-    for (i = 0; /* void */; i++) {
-
-        if (i >= part->nelts) {
-            if (part->next == NULL) {
-                break;
-            }
-
-            part = part->next;
-            h = part->elts;
-            i = 0;
-        }
-
-        if (h[i].hash == 0) {
-            continue;
-        }
-
-        if (ngx_http_proxy_auth_aws_header_name_eq(&h[i].key,
-                &ngx_http_proxy_auth_aws_host_header)
-            == NGX_OK)
-        {
-            host = h[i].value;
-            break;
-        }
-    }
-
-    if (host.len == 0) {
+    if (ngx_http_proxy_filter_get_host(r, ctx, &host) != NGX_OK) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                       "proxy_auth_aws: host header not found");
+        return NGX_ERROR;
+    }
+
+    if (host == NULL || host->len == 0 || host->data == NULL) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "proxy_auth_aws: host header is empty");
         return NGX_ERROR;
     }
 
@@ -886,7 +860,7 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
         return NGX_ERROR;
     }
 
-    if (ngx_http_proxy_auth_aws_sign_headers(r, conf, &host, uri, method,
+    if (ngx_http_proxy_auth_aws_sign_headers(r, conf, host, uri, method,
                                              &signed_headers)
         != NGX_OK)
     {
