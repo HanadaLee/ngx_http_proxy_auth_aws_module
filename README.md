@@ -269,7 +269,7 @@ L4vRLWAO92X5L3Sqk5QydUSdB0nC9+1wfqLMOKLbRp4=
 
 ```
 ## Supported environments
-This plugin is tested against a variety of nginx versions, compilers, OS versions and hardware architectures. Take a look at the .travis.yml file or the latest travis build status to see the versions that the plugin has been tested against
+The test suite is provided as an nginx-tests case in `t/proxy_auth_aws.t`.
 
 
 ## Known limitations
