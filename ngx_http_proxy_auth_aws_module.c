@@ -1,8 +1,8 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
-#if (NGX_CONDITION)
-#include <ngx_http_condition_module.h>
+#if (NGX_EXPR)
+#include <ngx_http_expr_module.h>
 #endif
 #if (NGX_HTTP_PROXY_FILTER)
 #include <ngx_http_proxy_filter_module.h>
@@ -27,7 +27,7 @@ typedef struct {
 
 
 typedef struct {
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
     ngx_array_t               *enable;
 #if !(NGX_HTTP_PROXY_FILTER) && (NGX_HTTP_CACHE)
     ngx_array_t               *convert_head;
@@ -90,7 +90,7 @@ static ngx_int_t ngx_http_proxy_auth_aws_sign_headers(ngx_http_request_t *r,
 static ngx_int_t ngx_http_proxy_auth_aws_header_name_eq(ngx_str_t *key,
     ngx_str_t *name);
 static ngx_int_t ngx_http_proxy_auth_aws_init(ngx_conf_t *cf);
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
 static char *ngx_http_proxy_auth_aws_set_signing_key(ngx_conf_t *cf,
     ngx_command_t *cmd, void *conf);
 #endif
@@ -105,12 +105,12 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
 
     { ngx_string("proxy_auth_aws"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_FLAG,
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
       ngx_conf_set_conditional_flag_slot,
 #else
       ngx_conf_set_flag_slot,
@@ -128,12 +128,12 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
 
     { ngx_string("proxy_auth_aws_access_key"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_TAKE1,
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
       ngx_conf_set_conditional_str_slot,
 #else
       ngx_conf_set_str_slot,
@@ -144,12 +144,12 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
 
     { ngx_string("proxy_auth_aws_key_scope"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_TAKE1,
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
       ngx_conf_set_conditional_str_slot,
 #else
       ngx_conf_set_str_slot,
@@ -160,12 +160,12 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
 
     { ngx_string("proxy_auth_aws_signing_key"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_TAKE1,
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
       ngx_http_proxy_auth_aws_set_signing_key,
 #else
       ngx_conf_set_str_slot,
@@ -176,12 +176,12 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
 
     { ngx_string("proxy_auth_aws_secret_key"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_TAKE1,
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
       ngx_conf_set_conditional_str_slot,
 #else
       ngx_conf_set_str_slot,
@@ -192,12 +192,12 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
 
     { ngx_string("proxy_auth_aws_region"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_TAKE1,
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
       ngx_conf_set_conditional_str_slot,
 #else
       ngx_conf_set_str_slot,
@@ -210,13 +210,13 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
 
     { ngx_string("proxy_auth_aws_host"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_TAKE1,
-#if (NGX_CONDITION)
-      ngx_http_set_conditional_complex_value_slot,
+#if (NGX_EXPR)
+      ngx_http_set_expr_complex_value_slot,
 #else
       ngx_http_set_complex_value_slot,
 #endif
@@ -226,13 +226,13 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
 
     { ngx_string("proxy_auth_aws_uri"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_TAKE1,
-#if (NGX_CONDITION)
-      ngx_http_set_conditional_complex_value_slot,
+#if (NGX_EXPR)
+      ngx_http_set_expr_complex_value_slot,
 #else
       ngx_http_set_complex_value_slot,
 #endif
@@ -245,12 +245,12 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
 #if !(NGX_HTTP_PROXY_FILTER) && (NGX_HTTP_CACHE)
     { ngx_string("proxy_auth_aws_convert_head"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_FLAG,
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
       ngx_conf_set_conditional_flag_slot,
 #else
       ngx_conf_set_flag_slot,
@@ -444,7 +444,7 @@ ngx_http_proxy_auth_aws_variables(ngx_http_request_t *r,
 #endif
 
 
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
 
 static char *
 ngx_http_proxy_auth_aws_set_signing_key(ngx_conf_t *cf, ngx_command_t *cmd,
@@ -455,7 +455,7 @@ ngx_http_proxy_auth_aws_set_signing_key(ngx_conf_t *cf, ngx_command_t *cmd,
     ngx_str_t                     *value;
     ngx_str_t                      decoded;
     ngx_array_t                  **values;
-    ngx_conf_condition_str_ctx_t  *ctx;
+    ngx_conf_expr_str_ctx_t       *ctx;
 
     value = cf->args->elts;
 
@@ -484,11 +484,11 @@ ngx_http_proxy_auth_aws_set_signing_key(ngx_conf_t *cf, ngx_command_t *cmd,
     }
 
     values = (ngx_array_t **) ((u_char *) conf + cmd->offset);
-    ctx = ngx_condition_find_expr_ctx(*values,
-                                      ngx_condition_get_associated_expr_id(cf),
-                                      sizeof(ngx_conf_condition_str_ctx_t),
-                                      offsetof(ngx_conf_condition_str_ctx_t,
-                                               expr_id));
+    ctx = ngx_expr_find_ctx(*values,
+                            ngx_expr_get_associated_when_id(cf),
+                            sizeof(ngx_conf_expr_str_ctx_t),
+                            offsetof(ngx_conf_expr_str_ctx_t,
+                            expr_id));
     if (ctx == NULL) {
         return NGX_CONF_ERROR;
     }
@@ -513,7 +513,7 @@ ngx_http_proxy_auth_aws_create_loc_conf(ngx_conf_t *cf)
 
     conf->bypass = NGX_CONF_UNSET_PTR;
 
-#if !(NGX_CONDITION)
+#if !(NGX_EXPR)
     conf->enable = NGX_CONF_UNSET;
 #if !(NGX_HTTP_PROXY_FILTER) && (NGX_HTTP_CACHE)
     conf->convert_head = NGX_CONF_UNSET;
@@ -536,20 +536,19 @@ ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf, void *parent,
     ngx_http_proxy_auth_aws_conf_t *prev = parent;
     ngx_http_proxy_auth_aws_conf_t *conf = child;
 
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
     ngx_str_t  empty = ngx_null_string;
     ngx_str_t  region = ngx_string("us-east-1");
 
-    if (ngx_conf_merge_conditional_flag_value(cf, &conf->enable,
-                                              prev->enable, 0)
+    if (ngx_conf_merge_expr_flag_value(cf, &conf->enable, prev->enable, 0)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
 
 #if !(NGX_HTTP_PROXY_FILTER) && (NGX_HTTP_CACHE)
-    if (ngx_conf_merge_conditional_flag_value(cf, &conf->convert_head,
-                                              prev->convert_head, 1)
+    if (ngx_conf_merge_expr_flag_value(cf, &conf->convert_head,
+                                       prev->convert_head, 1)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
@@ -558,47 +557,44 @@ ngx_http_proxy_auth_aws_merge_loc_conf(ngx_conf_t *cf, void *parent,
 
     ngx_conf_merge_ptr_value(conf->bypass, prev->bypass, NULL);
 
-    if (ngx_conf_merge_conditional_str_value(cf, &conf->access_key,
-                                             prev->access_key, empty)
+    if (ngx_conf_merge_expr_str_value(cf, &conf->access_key,
+                                      prev->access_key, empty)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
 
-    if (ngx_conf_merge_conditional_str_value(cf, &conf->key_scope,
-                                             prev->key_scope, empty)
+    if (ngx_conf_merge_expr_str_value(cf, &conf->key_scope,
+                                      prev->key_scope, empty)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
 
-    if (ngx_conf_merge_conditional_str_value(cf, &conf->signing_key,
-                                             prev->signing_key, empty)
+    if (ngx_conf_merge_expr_str_value(cf, &conf->signing_key,
+                                      prev->signing_key, empty)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
 
-    if (ngx_conf_merge_conditional_str_value(cf, &conf->secret_key,
-                                             prev->secret_key, empty)
+    if (ngx_conf_merge_expr_str_value(cf, &conf->secret_key,
+                                      prev->secret_key, empty)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
 
-    if (ngx_conf_merge_conditional_str_value(cf, &conf->region,
-                                             prev->region, region)
+    if (ngx_conf_merge_expr_str_value(cf, &conf->region, prev->region, region)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
     }
 
 #if !(NGX_HTTP_PROXY_FILTER)
-    if (ngx_conf_merge_conditional_ptr_value(cf, &conf->host,
-                                             prev->host, NULL)
+    if (ngx_conf_merge_expr_ptr_value(cf, &conf->host, prev->host, NULL)
         != NGX_OK
-        || ngx_conf_merge_conditional_ptr_value(cf, &conf->uri,
-                                                prev->uri, NULL)
+        || ngx_conf_merge_expr_ptr_value(cf, &conf->uri, prev->uri, NULL)
            != NGX_OK)
     {
         return NGX_CONF_ERROR;
@@ -680,14 +676,14 @@ ngx_http_proxy_auth_aws_sign_headers(ngx_http_request_t *r,
     ngx_str_t *uri, ngx_str_t *method, ngx_array_t **headers)
 {
     ngx_array_t *signed_headers;
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
     ngx_str_t   *access_key, *key_scope, *signing_key, *secret_key, *region;
 
-    access_key = ngx_http_get_conditional_str_value(r, conf->access_key);
-    key_scope = ngx_http_get_conditional_str_value(r, conf->key_scope);
-    signing_key = ngx_http_get_conditional_str_value(r, conf->signing_key);
-    secret_key = ngx_http_get_conditional_str_value(r, conf->secret_key);
-    region = ngx_http_get_conditional_str_value(r, conf->region);
+    access_key = ngx_http_get_expr_str_value(r, conf->access_key);
+    key_scope = ngx_http_get_expr_str_value(r, conf->key_scope);
+    signing_key = ngx_http_get_expr_str_value(r, conf->signing_key);
+    secret_key = ngx_http_get_expr_str_value(r, conf->secret_key);
+    region = ngx_http_get_expr_str_value(r, conf->region);
 
     if (access_key == NULL || key_scope == NULL || signing_key == NULL
         || secret_key == NULL || region == NULL)
@@ -809,8 +805,8 @@ ngx_http_proxy_auth_aws_request_filter(ngx_http_request_t *r,
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_proxy_auth_aws_module);
 
-#if (NGX_CONDITION)
-    if (!ngx_http_get_conditional_flag_value(r, conf->enable)) {
+#if (NGX_EXPR)
+    if (!ngx_http_get_expr_flag_value(r, conf->enable)) {
 #else
     if (!conf->enable) {
 #endif
@@ -938,8 +934,8 @@ ngx_http_proxy_auth_aws_request_method(ngx_http_request_t *r,
 
     ngx_flag_t  convert_head;
 
-#if (NGX_CONDITION)
-    convert_head = ngx_http_get_conditional_flag_value(r, conf->convert_head);
+#if (NGX_EXPR)
+    convert_head = ngx_http_get_expr_flag_value(r, conf->convert_head);
 #else
     convert_head = conf->convert_head;
 #endif
@@ -973,8 +969,8 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
 
     conf = ngx_http_get_module_loc_conf(r, ngx_http_proxy_auth_aws_module);
 
-#if (NGX_CONDITION)
-    if (!ngx_http_get_conditional_flag_value(r, conf->enable)) {
+#if (NGX_EXPR)
+    if (!ngx_http_get_expr_flag_value(r, conf->enable)) {
 #else
     if (!conf->enable) {
 #endif
@@ -1015,8 +1011,8 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
         return NGX_DECLINED;
     }
 
-#if (NGX_CONDITION)
-    host_cv = ngx_http_get_conditional_ptr_value(r, conf->host);
+#if (NGX_EXPR)
+    host_cv = ngx_http_get_expr_ptr_value(r, conf->host);
 #else
     host_cv = conf->host;
 #endif
@@ -1039,8 +1035,8 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
         return NGX_ERROR;
     }
 
-#if (NGX_CONDITION)
-    uri_cv = ngx_http_get_conditional_ptr_value(r, conf->uri);
+#if (NGX_EXPR)
+    uri_cv = ngx_http_get_expr_ptr_value(r, conf->uri);
 #else
     uri_cv = conf->uri;
 #endif
