@@ -1063,7 +1063,7 @@ ngx_http_proxy_auth_aws_handler(ngx_http_request_t *r)
                                              &signed_headers)
         != NGX_OK)
     {
-        return NGX_ERROR;
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
     ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_proxy_auth_aws_ctx_t));

@@ -29,8 +29,9 @@ my $signing_key = decode_base64(
 my $secret_key = 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY';
 
 my $t = Test::Nginx->new()->has(qw/http proxy/)->plan(25);
+my $filter = $t->has_module('ngx_http_proxy_filter_module');
 
-$t->write_file_expand('nginx.conf', <<'EOF');
+my $conf = <<'EOF';
 
 %%TEST_GLOBALS%%
 
@@ -95,6 +96,12 @@ http {
 
 EOF
 
+if ($filter) {
+    $conf =~ s/^\s*proxy_auth_aws_(?:host|uri)\s+[^;]+;\r?\n//mg;
+    $conf =~ s/\s*proxy_set_header\s+\S+\s+\$proxy_auth_aws_\w+;//g;
+}
+$t->write_file_expand('nginx.conf', $conf);
+
 $t->run_daemon(\&http_daemon, port(8081));
 $t->run()->waitforsocket('127.0.0.1:' . port(8081));
 
@@ -135,13 +142,17 @@ is(upstream_header($request, 'Authorization'),
         $scope, $signing_key),
     'URI canonicalized');
 
-$request = upstream_request('/override/client-path');
-like($request, qr!^GET /override/client-path HTTP/1\.1\r?$!m,
-    'configured URI does not rewrite upstream request');
-is(upstream_header($request, 'Authorization'),
-    expected_authorization($request,
-        '/canonical/object?brg1=val2&arg1=val1', $scope, $signing_key),
-    'configured URI signed');
+SKIP: {
+    skip 'explicit signing URI is only available without proxy filter', 2
+        if $filter;
+    $request = upstream_request('/override/client-path');
+    like($request, qr!^GET /override/client-path HTTP/1\.1\r?$!m,
+        'configured URI does not rewrite upstream request');
+    is(upstream_header($request, 'Authorization'),
+        expected_authorization($request,
+            '/canonical/object?brg1=val2&arg1=val1', $scope, $signing_key),
+        'configured URI signed');
+}
 
 $request = upstream_request('/signed/options', 'OPTIONS');
 like($request, qr!^OPTIONS /signed/options HTTP/1\.1\r?$!m,
@@ -252,6 +263,7 @@ sub canonical_target {
     my ($target) = @_;
     my ($path, $query) = split /\?/, $target, 2;
 
+    $path =~ tr/+/ /;
     $path =~ s/%([0-9a-fA-F]{2})/chr(hex($1))/eg;
     $path = aws_encode($path, 1);
 
@@ -259,12 +271,17 @@ sub canonical_target {
 
     my @args;
     for my $arg (split /&/, $query) {
+        next if $arg eq '' || $arg =~ /%(?![0-9a-fA-F]{2})/;
         my ($key, $value) = split /=/, $arg, 2;
         $value = '' if !defined $value;
+        for ($key, $value) {
+            tr/+/ /;
+            s/%([0-9a-fA-F]{2})/chr(hex($1))/eg;
+        }
         push @args, [aws_encode($key, 0), aws_encode($value, 0)];
     }
 
-    @args = sort { $a->[0] cmp $b->[0] } @args;
+    @args = sort { $a->[0] cmp $b->[0] || $a->[1] cmp $b->[1] } @args;
     $query = join '&', map { "$_->[0]=$_->[1]" } @args;
 
     return ($path, $query);

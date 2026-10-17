@@ -269,7 +269,37 @@ L4vRLWAO92X5L3Sqk5QydUSdB0nC9+1wfqLMOKLbRp4=
 
 ```
 ## Supported environments
-The test suite is provided as an nginx-tests case in `t/proxy_auth_aws.t`.
+The test suites in `t/` use the nginx-tests framework and run without AWS access
+or real credentials. They support both the proxy-filter and variable-based
+signing modes.
+
+```sh
+TEST_NGINX_BINARY=/path/to/nginx prove -I/path/to/nginx-tests/lib t/*.t
+```
+
+`t/canonical_uri.t` checks signatures against recorded S3 canonicalization
+results and verifies that signing does not change the outbound request target.
+The fixture provenance and additional regression coverage are described in
+`t/fixtures/README.md`.
+
+## Request target canonicalization
+
+Signing uses the upstream request target without modifying the URI sent to the
+upstream. The path and query string are separated before decoding. Each part is
+percent-decoded once; a literal `+` becomes a space, while `%2B` remains a plus.
+Unreserved characters are retained and escapes use uppercase hexadecimal.
+Slashes are retained in the path, without collapsing repeated slashes, resolving
+dot segments, or normalizing Unicode.
+
+Query parameters are split at `&` and the first `=`, then decoded and encoded
+individually. They are sorted by encoded name and then encoded value, preserving
+duplicates and empty values. Empty separators and parameter pairs containing
+malformed percent escapes are omitted. Invalid UTF-8 in query components is
+replaced with U+FFFD; malformed escapes, NUL, and invalid UTF-8 in the path cause
+signing to fail.
+
+An explicitly supplied upstream URI with no query string, including one ending
+in `?`, does not inherit the original client's query parameters.
 
 
 ## Known limitations

@@ -42,15 +42,12 @@ extern ngx_str_t  ngx_http_proxy_auth_aws_authz_header;
 ngx_str_t *ngx_http_proxy_auth_aws_compute_request_time(ngx_http_request_t *r,
     time_t *timep);
 int ngx_http_proxy_auth_aws_cmp_keys(const void *one, const void *two);
-ngx_int_t ngx_http_proxy_auth_aws_is_already_encoded(u_char *data, size_t len);
 ngx_str_t *ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
     ngx_str_t *args);
 ngx_http_proxy_auth_aws_canon_header_t ngx_http_proxy_auth_aws_canonize_headers(
     ngx_http_request_t *r, ngx_str_t *host, ngx_str_t *amz_date,
     ngx_str_t *content_hash);
 ngx_str_t *ngx_http_proxy_auth_aws_body_hash(ngx_http_request_t *r);
-ngx_int_t ngx_http_proxy_auth_aws_escape_uri(ngx_http_request_t *r,
-    ngx_str_t *src);
 ngx_str_t *ngx_http_proxy_auth_aws_canon_uri(ngx_http_request_t *r,
     ngx_str_t *path);
 ngx_http_proxy_auth_aws_canon_req_t

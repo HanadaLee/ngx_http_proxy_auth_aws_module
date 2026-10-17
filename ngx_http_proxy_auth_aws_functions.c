@@ -120,48 +120,189 @@ ngx_http_proxy_auth_aws_cmp_keys(const void *one, const void *two)
         ret = 0;
 
     } else {
-        ret = ngx_strncmp(first->key.data, second->key.data, len);
+        ret = ngx_memcmp(first->key.data, second->key.data, len);
     }
 
     if (ret != 0) {
         return ret;
     }
 
-    if (first->key.len == second->key.len) {
+    if (first->key.len != second->key.len) {
+        return first->key.len < second->key.len ? -1 : 1;
+    }
+
+    len = ngx_min(first->value.len, second->value.len);
+    ret = len ? ngx_memcmp(first->value.data, second->value.data, len) : 0;
+
+    if (ret != 0) {
+        return ret;
+    }
+
+    if (first->value.len == second->value.len) {
         return 0;
     }
 
-    if (first->key.len < second->key.len) {
-        return -1;
-    }
-
-    return 1;
+    return first->value.len < second->value.len ? -1 : 1;
 }
 
 
-ngx_int_t
-ngx_http_proxy_auth_aws_is_already_encoded(u_char *data, size_t len)
+static ngx_int_t
+ngx_http_proxy_auth_aws_decode(ngx_http_request_t *r, ngx_str_t *src,
+    ngx_str_t *dst)
 {
-    size_t  i;
+    u_char     *p, *last, *d;
+    ngx_int_t   value;
 
-    if (len < 3) {
-        return NGX_DECLINED;
+    if (src->len >= NGX_MAX_SIZE_T_VALUE) {
+        return NGX_ERROR;
     }
 
-    for (i = 0; i < len - 2; i++) {
-        if (data[i] == '%'
-            && ((data[i + 1] >= '0' && data[i + 1] <= '9')
-                || (data[i + 1] >= 'A' && data[i + 1] <= 'F')
-                || (data[i + 1] >= 'a' && data[i + 1] <= 'f'))
-            && ((data[i + 2] >= '0' && data[i + 2] <= '9')
-                || (data[i + 2] >= 'A' && data[i + 2] <= 'F')
-                || (data[i + 2] >= 'a' && data[i + 2] <= 'f')))
-        {
-            return NGX_OK;
+    dst->data = ngx_pnalloc(r->pool, src->len + 1);
+    if (dst->data == NULL) {
+        return NGX_ERROR;
+    }
+
+    d = dst->data;
+    p = src->data;
+    last = p + src->len;
+
+    while (p < last) {
+        if (*p == '%') {
+            if (last - p < 3) {
+                return NGX_DECLINED;
+            }
+
+            value = ngx_hextoi(p + 1, 2);
+            if (value == NGX_ERROR) {
+                return NGX_DECLINED;
+            }
+
+            *d++ = (u_char) value;
+            p += 3;
+
+        } else {
+            /* Only a literal plus is a space, not a decoded %2B. */
+            *d++ = *p == '+' ? ' ' : *p;
+            p++;
         }
     }
 
-    return NGX_DECLINED;
+    dst->len = d - dst->data;
+    *d = '\0';
+
+    return NGX_OK;
+}
+
+
+static size_t
+ngx_http_proxy_auth_aws_utf8_sequence(u_char *p, size_t len,
+    ngx_uint_t *valid)
+{
+    size_t  i, n;
+    u_char  c;
+
+    *valid = 0;
+    c = p[0];
+
+    if (c < 0x80) {
+        *valid = 1;
+        return 1;
+    }
+
+    if (c >= 0xc2 && c <= 0xdf) {
+        n = 2;
+
+    } else if (c >= 0xe0 && c <= 0xef) {
+        n = 3;
+
+    } else if (c >= 0xf0 && c <= 0xf4) {
+        n = 4;
+
+    } else {
+        return 1;
+    }
+
+    for (i = 1; i < n; i++) {
+        if (i == len || (p[i] & 0xc0) != 0x80) {
+            return i;
+        }
+
+        if (i == 1
+            && ((c == 0xe0 && p[i] < 0xa0)
+                || (c == 0xf0 && p[i] < 0x90)
+                || (c == 0xf4 && p[i] > 0x8f)))
+        {
+            return 1;
+        }
+    }
+
+    /* S3 replaces an encoded surrogate with one U+FFFD in query strings. */
+    if (c != 0xed || p[1] < 0xa0) {
+        *valid = 1;
+    }
+
+    return n;
+}
+
+
+static ngx_int_t
+ngx_http_proxy_auth_aws_encode(ngx_http_request_t *r, ngx_str_t *src,
+    ngx_str_t *dst, ngx_uint_t path)
+{
+    size_t      i, n;
+    u_char     *p, *last, *d, c;
+    ngx_uint_t  valid;
+
+    static u_char  hex[] = "0123456789ABCDEF";
+
+    /* One invalid UTF-8 byte can expand to %EF%BF%BD. */
+    if (src->len > (NGX_MAX_SIZE_T_VALUE - 1) / 9) {
+        return NGX_ERROR;
+    }
+
+    dst->data = ngx_pnalloc(r->pool, src->len * (path ? 3 : 9) + 1);
+    if (dst->data == NULL) {
+        return NGX_ERROR;
+    }
+
+    d = dst->data;
+    p = src->data;
+    last = p + src->len;
+
+    while (p < last) {
+        n = ngx_http_proxy_auth_aws_utf8_sequence(p, last - p, &valid);
+
+        if (path && (!valid || *p == '\0')) {
+            return NGX_DECLINED;
+        }
+
+        if (!valid) {
+            d = ngx_cpymem(d, "%EF%BF%BD", sizeof("%EF%BF%BD") - 1);
+            p += n;
+            continue;
+        }
+
+        for (i = 0; i < n; i++) {
+            c = *p++;
+
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                || (c >= '0' && c <= '9') || c == '-' || c == '_'
+                || c == '.' || c == '~' || (path && c == '/'))
+            {
+                *d++ = c;
+
+            } else {
+                *d++ = '%';
+                *d++ = hex[c >> 4];
+                *d++ = hex[c & 0xf];
+            }
+        }
+    }
+
+    dst->len = d - dst->data;
+    *d = '\0';
+
+    return NGX_OK;
 }
 
 
@@ -187,185 +328,125 @@ ngx_str_t *
 ngx_http_proxy_auth_aws_canonize_query_string(ngx_http_request_t *r,
     ngx_str_t *args)
 {
-    u_char                            *p, *ampersand, *equal, *last, *dst;
-    size_t                             i, len, total_len;
-    ngx_str_t                         *retval;
-    ngx_keyval_t                      *qs_arg;
-    ngx_array_t                       *query_string_args;
+    u_char        *p, *end, *equal, *last, *dst;
+    size_t         i, total_len;
+    ngx_int_t      rc;
+    ngx_str_t      raw, key, value, *retval;
+    ngx_keyval_t   arg, *qs_arg;
+    ngx_array_t    query_string_args;
 
-    if (args->len == 0 && r->args.len == 0) {
+    if (args->len == 0) {
         return &ngx_http_proxy_auth_aws_empty_string;
+    }
+
+    if (ngx_array_init(&query_string_args, r->pool, 4, sizeof(ngx_keyval_t))
+        != NGX_OK)
+    {
+        return NULL;
+    }
+
+    p = args->data;
+    last = p + args->len;
+
+    while (p < last) {
+        end = ngx_strlchr(p, last, '&');
+        if (end == NULL) {
+            end = last;
+        }
+
+        equal = ngx_strlchr(p, end, '=');
+        raw.data = p;
+        raw.len = (equal ? equal : end) - p;
+        p = end < last ? end + 1 : last;
+
+        if (raw.len == 0 && equal == NULL) {
+            continue;
+        }
+
+        rc = ngx_http_proxy_auth_aws_decode(r, &raw, &key);
+        if (rc == NGX_ERROR) {
+            return NULL;
+        }
+
+        if (rc == NGX_DECLINED) {
+            continue;
+        }
+
+        raw.data = equal ? equal + 1 : end;
+        raw.len = end - raw.data;
+
+        rc = ngx_http_proxy_auth_aws_decode(r, &raw, &value);
+        if (rc == NGX_ERROR) {
+            return NULL;
+        }
+
+        if (rc == NGX_DECLINED) {
+            continue;
+        }
+
+        if (ngx_http_proxy_auth_aws_encode(r, &key, &arg.key, 0) != NGX_OK
+            || ngx_http_proxy_auth_aws_encode(r, &value, &arg.value, 0)
+               != NGX_OK)
+        {
+            return NULL;
+        }
+
+        qs_arg = ngx_array_push(&query_string_args);
+        if (qs_arg == NULL) {
+            return NULL;
+        }
+
+        *qs_arg = arg;
+    }
+
+    if (query_string_args.nelts == 0) {
+        return &ngx_http_proxy_auth_aws_empty_string;
+    }
+
+    ngx_qsort(query_string_args.elts, (size_t) query_string_args.nelts,
+              sizeof(ngx_keyval_t), ngx_http_proxy_auth_aws_cmp_keys);
+
+    total_len = 0;
+    qs_arg = query_string_args.elts;
+
+    for (i = 0; i < query_string_args.nelts; i++) {
+        if (total_len > NGX_MAX_SIZE_T_VALUE - 2
+            || qs_arg[i].key.len > NGX_MAX_SIZE_T_VALUE - total_len - 2)
+        {
+            return NULL;
+        }
+
+        total_len += qs_arg[i].key.len + 2;
+
+        if (qs_arg[i].value.len > NGX_MAX_SIZE_T_VALUE - total_len) {
+            return NULL;
+        }
+
+        total_len += qs_arg[i].value.len;
     }
 
     retval = ngx_palloc(r->pool, sizeof(ngx_str_t));
     if (retval == NULL) {
-        ngx_http_proxy_auth_aws_log_error(r,
-            "failed to allocate memory for retval");
         return NULL;
     }
 
-    query_string_args = ngx_array_create(r->pool, 1,
-        sizeof(ngx_keyval_t));
-    if (query_string_args == NULL) {
-        ngx_http_proxy_auth_aws_log_error(r,
-            "failed to create query_string_args array");
-        return NULL;
-    }
-
-    if (args->len == 0) {
-        p = r->args.data;
-        last = p + r->args.len;
-
-    } else {
-        p = args->data;
-        last = p + args->len;
-    }
-
-    for ( /* void */ ; p < last; p++) {
-        qs_arg = ngx_array_push(query_string_args);
-        if (qs_arg == NULL) {
-            ngx_http_proxy_auth_aws_log_error(r,
-                "failed to push query_string_args element");
-            return NULL;
-        }
-
-        ampersand = ngx_strlchr(p, last, '&');
-        if (ampersand == NULL) {
-            ampersand = last;
-        }
-
-        equal = ngx_strlchr(p, last, '=');
-        if ((equal == NULL) || (equal > ampersand)) {
-            equal = ampersand;
-        }
-
-        len = equal - p;
-        if (len > 0) {
-            if (len >= 3
-                && ngx_http_proxy_auth_aws_is_already_encoded(p, len)
-                   == NGX_OK)
-            {
-                qs_arg->key.data = ngx_pnalloc(r->pool, len);
-                if (qs_arg->key.data == NULL) {
-                    ngx_http_proxy_auth_aws_log_error(r,
-                        "failed to allocate memory for "
-                                       "qs_arg->key.data");
-                    return NULL;
-                }
-
-                ngx_memcpy(qs_arg->key.data, p, len);
-                qs_arg->key.len = len;
-
-            } else {
-                qs_arg->key.data = ngx_pnalloc(r->pool, len * 3);
-                if (qs_arg->key.data == NULL) {
-                    ngx_http_proxy_auth_aws_log_error(r,
-                        "failed to allocate memory for "
-                                       "qs_arg->key.data");
-                    return NULL;
-                }
-
-                qs_arg->key.len = (u_char *) ngx_escape_uri(
-                    qs_arg->key.data, p, len, NGX_ESCAPE_ARGS)
-                    - qs_arg->key.data;
-            }
-
-        } else {
-            qs_arg->key = ngx_http_proxy_auth_aws_empty_string;
-        }
-
-        len = ampersand - equal;
-        if (len > 0) {
-
-            if (len >= 3
-                && ngx_http_proxy_auth_aws_is_already_encoded(equal + 1,
-                                                              len - 1)
-                   == NGX_OK)
-            {
-                qs_arg->value.data = ngx_pnalloc(r->pool, len - 1);
-                if (qs_arg->value.data == NULL) {
-                    ngx_http_proxy_auth_aws_log_error(r,
-                        "failed to allocate memory for "
-                                       "qs_arg->value.data");
-                    return NULL;
-                }
-
-                ngx_memcpy(qs_arg->value.data, equal + 1, len - 1);
-                qs_arg->value.len = len - 1;
-
-            } else {
-                qs_arg->value.data = ngx_pnalloc(r->pool, len * 3);
-                if (qs_arg->value.data == NULL) {
-                    ngx_http_proxy_auth_aws_log_error(r,
-                        "failed to allocate memory for "
-                                       "qs_arg->value.data");
-                    return NULL;
-                }
-
-                qs_arg->value.len = (u_char *) ngx_escape_uri(
-                    qs_arg->value.data, equal + 1, len - 1,
-                    NGX_ESCAPE_ARGS)
-                    - qs_arg->value.data;
-            }
-
-        } else {
-            qs_arg->value = ngx_http_proxy_auth_aws_empty_string;
-        }
-
-        p = ampersand;
-    }
-
-    if (query_string_args->nelts > 0) {
-        ngx_qsort(query_string_args->elts, (size_t) query_string_args->nelts,
-                  sizeof(ngx_keyval_t), ngx_http_proxy_auth_aws_cmp_keys);
-    }
-
-    total_len = 0;
-    for (i = 0; i < query_string_args->nelts; i++) {
-        qs_arg = &((ngx_keyval_t *) query_string_args->elts)[i];
-        total_len += qs_arg->key.len + 1 + qs_arg->value.len + 1;
-    }
-
-    if (query_string_args->nelts == 0) {
-        return &ngx_http_proxy_auth_aws_empty_string;
-    }
-
-    retval->data = ngx_pnalloc(r->pool, total_len + 1);
+    /* The final separator is replaced by the terminating zero. */
+    retval->data = ngx_pnalloc(r->pool, total_len);
     if (retval->data == NULL) {
-        ngx_http_proxy_auth_aws_log_error(r,
-            "failed to allocate memory for retval->data");
         return NULL;
     }
 
     dst = retval->data;
 
-    for (i = 0; i < query_string_args->nelts; i++) {
-        qs_arg = &((ngx_keyval_t *) query_string_args->elts)[i];
-
-        if (qs_arg->key.len != 0) {
-            dst = ngx_cpymem(dst, qs_arg->key.data, qs_arg->key.len);
-        }
-
+    for (i = 0; i < query_string_args.nelts; i++) {
+        dst = ngx_cpymem(dst, qs_arg[i].key.data, qs_arg[i].key.len);
         *dst++ = '=';
-
-        if (qs_arg->value.len != 0) {
-            dst = ngx_cpymem(dst, qs_arg->value.data, qs_arg->value.len);
-        }
-
+        dst = ngx_cpymem(dst, qs_arg[i].value.data, qs_arg[i].value.len);
         *dst++ = '&';
     }
 
-    retval->len = dst - retval->data;
-
-    if (retval->len == 0) {
-        return &ngx_http_proxy_auth_aws_empty_string;
-    }
-
-    retval->len--;
+    retval->len = dst - retval->data - 1;
     retval->data[retval->len] = '\0';
-
-    ngx_http_proxy_auth_aws_log_info(r, "canonical qs constructed is %V",
-                                     retval);
 
     return retval;
 }
@@ -500,155 +581,24 @@ ngx_http_proxy_auth_aws_body_hash(ngx_http_request_t *r)
 }
 
 
-/*
- * AWS wants a peculiar kind of URI-encoding: they want RFC 3986, except that
- * slashes shouldn't be encoded...  This function is a light wrapper around
- * ngx_escape_uri that does exactly that.  It modifies the source in place if
- * it needs to be escaped.
- * See
- * See the AWS Signature Version 4 canonical request documentation.
- *   html
- */
-
-ngx_int_t
-ngx_http_proxy_auth_aws_escape_uri(ngx_http_request_t *r, ngx_str_t *src)
-{
-    u_char        *escaped_data;
-    size_t         escaped_data_len, escaped_data_with_slashes_len, i, j;
-    uintptr_t      escaped_count, slashes_count = 0;
-
-    /* first, we need to know how many characters need to be escaped */
-    escaped_count = ngx_escape_uri(NULL, src->data, src->len,
-                                   NGX_ESCAPE_URI_COMPONENT);
-    /* except slashes should not be escaped... */
-    if (escaped_count > 0) {
-        for (i = 0; i < src->len; i++) {
-            if (src->data[i] == '/') {
-                slashes_count++;
-            }
-        }
-    }
-
-    if (escaped_count == slashes_count) {
-        /* nothing to do! nothing but slashes escaped (if even that) */
-        return NGX_OK;
-    }
-
-    /* each escaped character is replaced by 3 characters */
-    escaped_data_len = src->len + escaped_count * 2;
-    escaped_data = ngx_pnalloc(r->pool, escaped_data_len + 1);
-    if (escaped_data == NULL) {
-        return NGX_ERROR;
-    }
-
-    ngx_escape_uri(escaped_data, src->data, src->len,
-                   NGX_ESCAPE_URI_COMPONENT);
-
-    /* now we need to go back and re-replace each occurrence of %2F with
-     * a slash
-     */
-    escaped_data_with_slashes_len = src->len
-                                    + (escaped_count - slashes_count) * 2;
-
-    if (slashes_count > 0) {
-
-        for (i = 0, j = 0; i < escaped_data_with_slashes_len; i++) {
-
-            if (j < escaped_data_len - 2
-                && ngx_strncmp(escaped_data + j, "%2F", 3) == 0)
-            {
-                escaped_data[i] = '/';
-                j += 3;
-
-            } else {
-                escaped_data[i] = escaped_data[j];
-                j++;
-            }
-        }
-
-        src->len = escaped_data_with_slashes_len;
-
-    } else {
-        /* no slashes */
-        src->len = escaped_data_len;
-    }
-
-    src->data = escaped_data;
-    src->data[src->len] = '\0';
-
-    return NGX_OK;
-}
-
-
 ngx_str_t *
 ngx_http_proxy_auth_aws_canon_uri(ngx_http_request_t *r, ngx_str_t *path)
 {
-    ngx_str_t      *retval;
-    u_char         *src, *dst;
-    u_char         *uri_data;
-    size_t          uri_len;
+    ngx_str_t   decoded, *retval;
 
-    if (path->len != 0) {
-        uri_data = path->data;
-        uri_len = path->len;
-
-    } else if (r->args.len == 0) {
-        uri_data = r->uri.data;
-        uri_len = r->uri.len;
-
-    } else {
-        uri_data = r->uri_start;
-        uri_len = r->args_start - r->uri_start - 1;
+    if (ngx_http_proxy_auth_aws_decode(r, path, &decoded) != NGX_OK) {
+        return NULL;
     }
 
-    /* we need to copy that data to not modify the request for other modules */
     retval = ngx_palloc(r->pool, sizeof(ngx_str_t));
     if (retval == NULL) {
-        ngx_http_proxy_auth_aws_log_error(r,
-            "failed to allocate memory for retval");
         return NULL;
     }
 
-    retval->data = ngx_pnalloc(r->pool, uri_len + 1);
-    if (retval->data == NULL) {
-        ngx_http_proxy_auth_aws_log_error(r,
-            "failed to allocate memory for retval->data");
+    /* Keep slashes, dot segments, and Unicode byte sequences unchanged. */
+    if (ngx_http_proxy_auth_aws_encode(r, &decoded, retval, 1) != NGX_OK) {
         return NULL;
     }
-
-    if (uri_len >= 3
-        && ngx_http_proxy_auth_aws_is_already_encoded(uri_data, uri_len)
-           == NGX_OK)
-    {
-        src = (u_char *) uri_data;
-        dst = retval->data;
-        ngx_unescape_uri(&dst, &src, uri_len, 0);
-        retval->len = dst - retval->data;
-
-    } else {
-        if (uri_len != 0) {
-            ngx_memcpy(retval->data, uri_data, uri_len);
-        }
-
-        retval->len = uri_len;
-    }
-
-    retval->data[retval->len] = '\0';
-
-    ngx_http_proxy_auth_aws_log_info(r,
-        "canonical url extracted before uri encoding is %V",
-                      retval);
-
-    /* then URI-encode it per RFC 3986 */
-    if (ngx_http_proxy_auth_aws_escape_uri(r, retval) != NGX_OK) {
-        ngx_http_proxy_auth_aws_log_error(r,
-            "failed to allocate memory for escaped uri");
-        return NULL;
-    }
-
-    ngx_http_proxy_auth_aws_log_info(r,
-        "canonical url extracted after uri encoding is %V",
-                      retval);
 
     return retval;
 }
@@ -668,43 +618,32 @@ ngx_http_proxy_auth_aws_make_canonical_request(ngx_http_request_t *r,
     ngx_memzero(&retval, sizeof(ngx_http_proxy_auth_aws_canon_req_t));
 
     if (host == NULL || amz_date == NULL || method == NULL
-        || method->len == 0)
+        || method->len == 0 || uri == NULL || uri->data == NULL
+        || uri->len == 0 || uri->data[0] != '/')
     {
         return retval;
     }
 
     ngx_http_proxy_auth_aws_log_debug0(r, "making canonical request");
 
-    path.data = (u_char *) "";
-    path.len = 0;
+    path = *uri;
+    ngx_str_null(&args);
 
-    args.data = (u_char *) "";
-    args.len = 0;
+    question_mark = ngx_strlchr(uri->data, uri->data + uri->len, '?');
 
-    if (uri != NULL && uri->data != NULL && uri->len > 0) {
-        path.data = uri->data;
-        path.len = uri->len;
-
-        question_mark = ngx_strlchr(uri->data, uri->data + uri->len, '?');
-
-        if (question_mark != NULL) {
-            path.len = question_mark - uri->data;
-            args.data = question_mark + 1;
-            args.len = uri->len - path.len - 1;
-        }
+    if (question_mark != NULL) {
+        path.len = question_mark - uri->data;
+        args.data = question_mark + 1;
+        args.len = uri->len - path.len - 1;
     }
 
     ngx_http_proxy_auth_aws_log_debug0(r, "canonizing query string");
 
     /* canonize query string */
-    if (r->args.len == 0 && args.len == 0) {
-        canon_qs = &ngx_http_proxy_auth_aws_empty_string;
-
-    } else {
-        canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r, &args);
-        if (canon_qs == NULL) {
-            return retval;
-        }
+    /* An explicit upstream URI never inherits the client's query string. */
+    canon_qs = ngx_http_proxy_auth_aws_canonize_query_string(r, &args);
+    if (canon_qs == NULL) {
+        return retval;
     }
 
     /* compute request body hash */
