@@ -1,5 +1,7 @@
 # Proxy Auth AWS module for Nginx
 
+This module must be built statically with `--add-module`.
+
 This nginx module can proxy requests to authenticated S3 backends using Amazon's
 V4 authentication API. The first version of this module was written for the V2
 authentication protocol and can be found in the *AuthV2* branch.
