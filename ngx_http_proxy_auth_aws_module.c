@@ -240,9 +240,7 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
       offsetof(ngx_http_proxy_auth_aws_conf_t, uri),
       NULL },
 
-#endif
-
-#if !(NGX_HTTP_PROXY_FILTER) && (NGX_HTTP_CACHE)
+#if (NGX_HTTP_CACHE)
     { ngx_string("proxy_auth_aws_convert_head"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
 #if (NGX_EXPR)
@@ -258,6 +256,7 @@ static ngx_command_t  ngx_http_proxy_auth_aws_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_proxy_auth_aws_conf_t, convert_head),
       NULL },
+#endif
 #endif
 
     ngx_null_command
@@ -515,11 +514,11 @@ ngx_http_proxy_auth_aws_create_loc_conf(ngx_conf_t *cf)
 
 #if !(NGX_EXPR)
     conf->enable = NGX_CONF_UNSET;
-#if !(NGX_HTTP_PROXY_FILTER) && (NGX_HTTP_CACHE)
+#if !(NGX_HTTP_PROXY_FILTER)
+#if (NGX_HTTP_CACHE)
     conf->convert_head = NGX_CONF_UNSET;
 #endif
 
-#if !(NGX_HTTP_PROXY_FILTER)
     conf->host = NGX_CONF_UNSET_PTR;
     conf->uri = NGX_CONF_UNSET_PTR;
 #endif
